@@ -1,12 +1,12 @@
 import { Controller, Get } from '@nestjs/common';
-import { VehiclesService } from './vehicles.service';
+import { VehiclesService, Vehicle } from './vehicles.service';
 
-@Controller()
+@Controller('vehicles')
 export class VehiclesController {
   constructor(private readonly vehiclesService: VehiclesService) {}
 
   @Get()
-  getHello(): string {
+  getHello(): Vehicle[] {
     return this.vehiclesService.getHello();
   }
 }
