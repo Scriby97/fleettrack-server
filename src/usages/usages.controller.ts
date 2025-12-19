@@ -17,8 +17,8 @@ export class UsagesController {
     // transform DTO to a Partial<UsageEntity> and pass to service
     const partial: Partial<UsageEntity> = {
       vehicleId: dto.vehicleId,
-      startTime: new Date(dto.startTime),
-      endTime: dto.endTime ? new Date(dto.endTime) : undefined,
+      startOperatingHours: dto.startOperatingHours,
+      endOperatingHours: dto.endOperatingHours,
       fuelLitersRefilled: dto.fuelLitersRefilled ?? 0,
     };
     return this.usagesService.create(partial);

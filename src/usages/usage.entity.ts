@@ -5,14 +5,14 @@ export class UsageEntity {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column()
+  @Column({ type: 'uuid' })
   vehicleId: string;
 
-  @Column({ type: 'timestamptz' })
-  startTime: Date;
+  @Column({ type: 'integer' })
+  startOperatingHours: number;
 
-  @Column({ type: 'timestamptz', nullable: true })
-  endTime?: Date;
+  @Column({ type: 'integer' })
+  endOperatingHours: number;
 
   @Column({ type: 'integer', default: 0 })
   fuelLitersRefilled: number;

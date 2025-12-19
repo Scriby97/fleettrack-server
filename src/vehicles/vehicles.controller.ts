@@ -11,6 +11,11 @@ export class VehiclesController {
     return this.vehiclesService.findAll();
   }
 
+  @Get('stats')
+  getStats() {
+    return this.vehiclesService.stats();
+  }
+
   @Post()
   create(@Body() dto: CreateVehicleDto) {
     return this.vehiclesService.create(dto);
