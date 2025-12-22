@@ -7,4 +7,7 @@ export class CreateVehicleDto {
   @IsString()
   @Length(1, 20)
   plate: string;
+
+  @IsString()
+  snowsatNumber: string;
 }

@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsNumber, Min } from 'class-validator';
+import { IsString, IsOptional, IsNumber, Min, IsDate } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreateUsageDto {
@@ -20,4 +20,9 @@ export class CreateUsageDto {
   @IsNumber()
   @Min(0)
   fuelLitersRefilled: number;
+
+  @Type(() => Date)
+  @IsDate()
+  @IsOptional()
+  creationDate?: Date;
 }

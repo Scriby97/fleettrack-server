@@ -20,6 +20,7 @@ export class UsagesController {
       startOperatingHours: dto.startOperatingHours,
       endOperatingHours: dto.endOperatingHours,
       fuelLitersRefilled: dto.fuelLitersRefilled ?? 0,
+      creationDate: dto.creationDate,
     };
     return this.usagesService.create(partial);
   }

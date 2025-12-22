@@ -12,5 +12,5 @@ export class VehicleEntity {
   plate: string;
 
   @Column()
-  SNOWsatNumber: string;
+  snowsatNumber: string;
 }

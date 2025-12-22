@@ -16,4 +16,7 @@ export class UsageEntity {
 
   @Column({ type: 'integer', default: 0 })
   fuelLitersRefilled: number;
+
+  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  creationDate: Date;
 }

@@ -8,14 +8,14 @@ export interface Vehicle {
   id: string;
   name: string;
   plate: string;
-  SNOWsatNumber: string;
+  snowsatNumber: string;
 }
 
 export interface VehicleStats {
   id: string;
   name: string;
   plate: string;
-  SNOWsatNumber: string;
+  snowsatNumber: string;
   totalWorkHours: number; // hours
   totalFuelLiters: number;
 }
@@ -52,11 +52,11 @@ export class VehiclesService {
           'v.id as id',
           'v.name as name',
           'v.plate as plate',
-          'v.SNOWsatNumber as "SNOWsatNumber"',
+          'v.snowsatNumber as "snowsatNumber"',
           'COALESCE(SUM(u.endOperatingHours - u.startOperatingHours), 0) as "totalWorkHours"',
           'COALESCE(SUM(u.fuelLitersRefilled), 0) as "totalFuelLiters"',
         ])
-        .groupBy('v.id, v.name, v.plate, v.SNOWsatNumber');
+        .groupBy('v.id, v.name, v.plate, v.snowsatNumber');
 
       // Log the generated SQL and parameters to help debugging
       try {
@@ -76,7 +76,7 @@ export class VehiclesService {
         id: r.id,
         name: r.name,
         plate: r.plate,
-        SNOWsatNumber: r.SNOWsatNumber,
+        snowsatNumber: r.snowsatNumber,
         totalWorkHours: Number(r.totalWorkHours) || 0,
         totalFuelLiters: Number(r.totalFuelLiters) || 0,
       }));
