@@ -4,6 +4,7 @@ import { CreateUsageDto } from './dto/create-usage.dto';
 import { UsageEntity } from './usage.entity';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthUser } from '../auth/decorators/current-user.decorator';
+import { UserRole } from '../auth/enums/user-role.enum';
 
 @Controller('usages')
 export class UsagesController {
@@ -12,11 +13,13 @@ export class UsagesController {
   /**
    * GET /usages
    * Alle Nutzungen abrufen (benötigt Auth)
+   * Admins sehen alle Usages, normale User nur ihre eigenen
    */
   @Get()
   getAll(@CurrentUser() user: AuthUser) {
-    // Optional: user.id nutzen für Filterung
-    return this.usagesService.findAll();
+    // Admins sehen alle Usages, normale User nur ihre eigenen
+    const isAdmin = user.role === UserRole.ADMIN;
+    return this.usagesService.findAll(isAdmin ? undefined : user.id);
   }
 
   /**
@@ -32,8 +35,8 @@ export class UsagesController {
       endOperatingHours: dto.endOperatingHours,
       fuelLitersRefilled: dto.fuelLitersRefilled ?? 0,
       creationDate: dto.creationDate,
+      creatorId: user.id,
     };
-    // Optional: user.id mit Nutzung verknüpfen
     return this.usagesService.create(partial);
   }
 }

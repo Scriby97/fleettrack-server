@@ -30,6 +30,19 @@ export class VehiclesController {
   }
 
   /**
+   * GET /vehicles/:vehicleId/last-operating-hours
+   * Letzte endOperatingHours eines Fahrzeugs abrufen (benötigt Auth)
+   */
+  @Get(':vehicleId/last-operating-hours')
+  async getLastOperatingHours(
+    @Param('vehicleId') vehicleId: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    const endOperatingHours = await this.vehiclesService.getLastOperatingHours(vehicleId);
+    return { endOperatingHours };
+  }
+
+  /**
    * POST /vehicles
    * Neues Fahrzeug erstellen (nur für Admins)
    */

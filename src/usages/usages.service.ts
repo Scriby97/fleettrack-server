@@ -10,7 +10,10 @@ export class UsagesService {
     private readonly repo: Repository<UsageEntity>,
   ) {}
 
-  async findAll(): Promise<UsageEntity[]> {
+  async findAll(creatorId?: string): Promise<UsageEntity[]> {
+    if (creatorId) {
+      return this.repo.find({ where: { creatorId } });
+    }
     return this.repo.find();
   }
 

@@ -87,6 +87,18 @@ export class VehiclesService {
       throw err;
     }
   }
+
+  /**
+   * Get the endOperatingHours from the last usage of a vehicle
+   */
+  async getLastOperatingHours(vehicleId: string): Promise<number | null> {
+    const lastUsage = await this.usageRepo.findOne({
+      where: { vehicleId },
+      order: { creationDate: 'DESC' },
+    });
+
+    return lastUsage ? lastUsage.endOperatingHours : null;
+  }
 }
 
   // getHello(): Vehicle[] {

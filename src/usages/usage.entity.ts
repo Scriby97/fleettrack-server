@@ -8,6 +8,9 @@ export class UsageEntity {
   @Column({ type: 'uuid' })
   vehicleId: string;
 
+  @Column({ type: 'uuid' })
+  creatorId: string;
+
   @Column({ type: 'integer' })
   startOperatingHours: number;
 
