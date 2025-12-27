@@ -1,6 +1,7 @@
-import { Controller, Get, Post, Body } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param } from '@nestjs/common';
 import { UsagesService } from './usages.service';
 import { CreateUsageDto } from './dto/create-usage.dto';
+import { UpdateUsageDto } from './dto/update-usage.dto';
 import { UsageEntity } from './usage.entity';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthUser } from '../auth/decorators/current-user.decorator';
@@ -38,5 +39,31 @@ export class UsagesController {
       creatorId: user.id,
     };
     return this.usagesService.create(partial);
+  }
+
+  /**
+   * PUT /usages/:id
+   * Usage aktualisieren (benötigt Auth)
+   */
+  @Put(':id')
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateUsageDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    const partial: Partial<UsageEntity> = {
+      ...dto,
+    };
+    return this.usagesService.update(id, partial);
+  }
+
+  /**
+   * DELETE /usages/:id
+   * Usage löschen (benötigt Auth)
+   */
+  @Delete(':id')
+  async remove(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    await this.usagesService.delete(id);
+    return { message: 'Usage gelöscht', id };
   }
 }

@@ -29,4 +29,17 @@ export class UsagesService {
     const saved = await this.repo.save(this.repo.create(toSave) as UsageEntity);
     return saved;
   }
+
+  async update(id: string, data: DeepPartial<UsageEntity>): Promise<UsageEntity> {
+    await this.repo.update(id, data);
+    const updated = await this.repo.findOne({ where: { id } });
+    if (!updated) {
+      throw new Error(`Usage with id ${id} not found`);
+    }
+    return updated;
+  }
+
+  async delete(id: string): Promise<void> {
+    await this.repo.delete(id);
+  }
 }
