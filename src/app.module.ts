@@ -21,13 +21,15 @@ import { AuthModule } from './auth/auth.module';
     }),
     TypeOrmModule.forRoot({
       type: 'postgres',
-      host: 'localhost',
-      port: 5432,
-      username: 'postgres',      // passe ggf. an
-      password: 'admin',      // passe ggf. an
-      database: 'postgres',    // erstelle DB falls nötig
+      url: process.env.DATABASE_URL,
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT) || 5432,
+      username: process.env.DB_USERNAME || 'postgres',
+      password: process.env.DB_PASSWORD || 'SkiweltGstaad',
+      database: process.env.DB_NAME || 'postgres',
       entities: [VehicleEntity, UsageEntity, UserProfileEntity],
-      synchronize: true,         // dev only
+      synchronize: true,
+      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
     }),
      TypeOrmModule.forFeature([VehicleEntity, UsageEntity]),
      SupabaseModule,
