@@ -26,8 +26,12 @@ import { AuthModule } from './auth/auth.module';
       synchronize: true,
       ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
       extra: {
-        // Force IPv4 to avoid IPv6 connection issues on some hosts
-        connectionString: process.env.DATABASE_URL,
+        // Force IPv4 to avoid IPv6 connection issues
+        options: '-c geqo=off',
+        // DNS resolution should prefer IPv4
+        dns: {
+          family: 4,
+        },
         ssl: process.env.NODE_ENV === 'production' ? {
           rejectUnauthorized: false,
         } : false,
