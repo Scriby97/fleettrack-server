@@ -22,14 +22,16 @@ import { AuthModule } from './auth/auth.module';
     TypeOrmModule.forRoot({
       type: 'postgres',
       url: process.env.DATABASE_URL,
-      host: process.env.DB_HOST || 'localhost',
-      port: parseInt(process.env.DB_PORT || '5432'),
-      username: process.env.DB_USERNAME || 'postgres',
-      password: process.env.DB_PASSWORD || 'SkiweltGstaad',
-      database: process.env.DB_NAME || 'postgres',
       entities: [VehicleEntity, UsageEntity, UserProfileEntity],
       synchronize: true,
       ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+      extra: {
+        // Force IPv4 to avoid IPv6 connection issues on some hosts
+        connectionString: process.env.DATABASE_URL,
+        ssl: process.env.NODE_ENV === 'production' ? {
+          rejectUnauthorized: false,
+        } : false,
+      },
     }),
      TypeOrmModule.forFeature([VehicleEntity, UsageEntity]),
      SupabaseModule,
