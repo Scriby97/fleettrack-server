@@ -74,6 +74,9 @@ export class SupabaseAuthGuard implements CanActivate {
         where: { id: user.id },
       });
 
+      this.logger.debug(`DB Lookup für User ID: ${user.id}, Email: ${user.email}`);
+      this.logger.debug(`Gefundenes Profil: ${JSON.stringify(profile)}`);
+
       // Erstelle automatisch ein Profile, falls es nicht existiert
       if (!profile) {
         this.logger.log(`Erstelle neues User-Profile für ${user.email}`);
@@ -91,8 +94,8 @@ export class SupabaseAuthGuard implements CanActivate {
       request.user = {
         id: user.id,
         email: user.email,
-        role: profile.role,
         ...user.user_metadata,
+        role: profile.role, // DB-Rolle hat Priorität über metadata
       };
 
       this.logger.debug(`User Rolle: ${request.user.role}`);
