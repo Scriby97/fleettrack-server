@@ -1,4 +1,4 @@
-import { IsString, Length } from 'class-validator';
+import { IsString, Length, IsUUID, IsOptional } from 'class-validator';
 
 export class CreateVehicleDto {
   @IsString()
@@ -10,4 +10,8 @@ export class CreateVehicleDto {
 
   @IsString()
   snowsatNumber: string;
+
+  @IsUUID()
+  @IsOptional()
+  organizationId?: string; // Optional für Super-Admins, die für andere Orgs erstellen
 }

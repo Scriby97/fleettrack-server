@@ -1,4 +1,6 @@
-import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 'typeorm';
+import { VehicleEntity } from '../vehicles/vehicle.entity';
+import { UserProfileEntity } from '../auth/entities/user-profile.entity';
 
 @Entity({ name: 'usages' })
 export class UsageEntity {
@@ -8,8 +10,16 @@ export class UsageEntity {
   @Column({ type: 'uuid' })
   vehicleId: string;
 
+  @ManyToOne(() => VehicleEntity, { nullable: false })
+  @JoinColumn({ name: 'vehicleId' })
+  vehicle: VehicleEntity;
+
   @Column({ type: 'uuid' })
   creatorId: string;
+
+  @ManyToOne(() => UserProfileEntity, { nullable: false })
+  @JoinColumn({ name: 'creatorId' })
+  creator: UserProfileEntity;
 
   @Column({ type: 'integer' })
   startOperatingHours: number;

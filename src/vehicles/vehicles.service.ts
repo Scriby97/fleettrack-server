@@ -29,11 +29,14 @@ export class VehiclesService {
     private readonly usageRepo: Repository<UsageEntity>,
   ) {}
 
-  async findAll(): Promise<Vehicle[]> {
+  async findAll(organizationId?: string): Promise<Vehicle[]> {
+    if (organizationId) {
+      return this.repo.find({ where: { organizationId } });
+    }
     return this.repo.find();
   }
 
-  async create(data: Partial<Vehicle>): Promise<Vehicle> {
+  async create(data: Partial<Vehicle> & { organizationId: string }): Promise<Vehicle> {
     const v = this.repo.create(data);
     return this.repo.save(v);
   }
@@ -43,7 +46,7 @@ export class VehiclesService {
    * - totalWorkHours: sum of (endTime - startTime) in hours
    * - totalFuelLiters: sum of fuelLitersRefilled
    */
-  async stats(): Promise<VehicleStats[]> {
+  async stats(organizationId?: string): Promise<VehicleStats[]> {
     // Query vehicles left-joined with usages and aggregate
     try {
       const qb = this.repo.createQueryBuilder('v')
@@ -57,6 +60,11 @@ export class VehiclesService {
           'COALESCE(SUM(u.fuelLitersRefilled), 0) as "totalFuelLiters"',
         ])
         .groupBy('v.id, v.name, v.plate, v.snowsatNumber');
+
+      // Filter by organization if provided
+      if (organizationId) {
+        qb.where('v.organizationId = :organizationId', { organizationId });
+      }
 
       // Log the generated SQL and parameters to help debugging
       try {

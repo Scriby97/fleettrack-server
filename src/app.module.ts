@@ -6,12 +6,15 @@ import { AppService } from './app.service';
 import { VehicleEntity } from './vehicles/vehicle.entity';
 import { UsageEntity } from './usages/usage.entity';
 import { UserProfileEntity } from './auth/entities/user-profile.entity';
+import { OrganizationEntity } from './organizations/organization.entity';
+import { OrganizationInviteEntity } from './organizations/entities/organization-invite.entity';
 import { UsagesService } from './usages/usages.service';
 import { VehiclesController } from './vehicles/vehicles.controller';
 import { UsagesController } from './usages/usages.controller';
 import { VehiclesService } from './vehicles/vehicles.service';
 import { SupabaseModule } from './supabase/supabase.module';
 import { AuthModule } from './auth/auth.module';
+import { OrganizationsModule } from './organizations/organizations.module';
 
 @Module({
   imports: [
@@ -22,8 +25,8 @@ import { AuthModule } from './auth/auth.module';
     TypeOrmModule.forRoot({
       type: 'postgres',
       url: process.env.DATABASE_URL,
-      entities: [VehicleEntity, UsageEntity, UserProfileEntity],
-      synchronize: true,
+      entities: [VehicleEntity, UsageEntity, UserProfileEntity, OrganizationEntity, OrganizationInviteEntity],
+      synchronize: false, // Temporär deaktiviert - wir machen Migrations manuell
       ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
       extra: {
         // Force IPv4 to avoid IPv6 connection issues on some hosts
@@ -36,6 +39,7 @@ import { AuthModule } from './auth/auth.module';
      TypeOrmModule.forFeature([VehicleEntity, UsageEntity]),
      SupabaseModule,
      AuthModule,
+     OrganizationsModule,
   ],
   controllers: [AppController,
     VehiclesController,

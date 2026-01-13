@@ -11,6 +11,7 @@ import {
 import { Public } from './decorators/public.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
 import type { AuthUser } from './decorators/current-user.decorator';
+import { CurrentOrganization } from './decorators/current-organization.decorator';
 import { Roles } from './decorators/roles.decorator';
 import { UserRole } from './enums/user-role.enum';
 
@@ -44,6 +45,7 @@ export class AuthController {
         ...dto.metadata,
       },
       UserRole.USER, // Standard-Rolle
+      dto.organizationId, // Organization ID aus DTO
     );
   }
 
@@ -102,18 +104,23 @@ export class AuthController {
   /**
    * GET /auth/users
    * Alle User abrufen (nur für Admins)
+   * Super-Admins sehen alle, normale Admins nur ihre Organisation
    */
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Get('users')
-  getAllUsers() {
-    return this.authService.getAllUsers();
+  getAllUsers(
+    @CurrentUser() user: AuthUser,
+    @CurrentOrganization() organizationId?: string,
+  ) {
+    const filterOrgId = user.role === UserRole.SUPER_ADMIN ? undefined : organizationId;
+    return this.authService.getAllUsers(filterOrgId);
   }
 
   /**
    * PATCH /auth/users/:userId/role
    * User-Rolle ändern (nur für Admins)
    */
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Patch('users/:userId/role')
   updateUserRole(
     @Param('userId') userId: string,

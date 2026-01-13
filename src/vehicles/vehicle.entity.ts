@@ -1,4 +1,11 @@
-import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  JoinColumn,
+} from 'typeorm';
+import { OrganizationEntity } from '../organizations/organization.entity';
 
 @Entity({ name: 'vehicles' })
 export class VehicleEntity {
@@ -13,4 +20,11 @@ export class VehicleEntity {
 
   @Column()
   snowsatNumber: string;
+
+  @Column({ type: 'uuid' })
+  organizationId: string;
+
+  @ManyToOne(() => OrganizationEntity, (org) => org.vehicles)
+  @JoinColumn({ name: 'organizationId' })
+  organization: OrganizationEntity;
 }

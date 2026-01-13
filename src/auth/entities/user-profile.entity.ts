@@ -4,7 +4,10 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
 } from 'typeorm';
+import { OrganizationEntity } from '../../organizations/organization.entity';
 
 @Entity('user_profiles')
 export class UserProfileEntity {
@@ -15,7 +18,14 @@ export class UserProfileEntity {
   email: string;
 
   @Column({ default: 'user' })
-  role: string; // 'admin' oder 'user'
+  role: string; // 'super_admin', 'admin' oder 'user'
+
+  @Column({ type: 'uuid', nullable: true })
+  organizationId?: string;
+
+  @ManyToOne(() => OrganizationEntity, (org) => org.users, { nullable: true })
+  @JoinColumn({ name: 'organizationId' })
+  organization?: OrganizationEntity;
 
   @Column({ nullable: true })
   firstName?: string;

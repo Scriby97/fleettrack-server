@@ -3,6 +3,7 @@ import { VehiclesService } from './vehicles.service';
 import { CreateVehicleDto } from './dto/create-vehicle.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthUser } from '../auth/decorators/current-user.decorator';
+import { CurrentOrganization } from '../auth/decorators/current-organization.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '../auth/enums/user-role.enum';
 
@@ -13,11 +14,16 @@ export class VehiclesController {
   /**
    * GET /vehicles
    * Alle Fahrzeuge abrufen (benötigt Auth)
+   * Super-Admins sehen alle, andere nur ihre Organisation
    */
   @Get()
-  getAll(@CurrentUser() user: AuthUser) {
-    // Optional: user.id nutzen für Filterung
-    return this.vehiclesService.findAll();
+  getAll(
+    @CurrentUser() user: AuthUser,
+    @CurrentOrganization() organizationId?: string,
+  ) {
+    // Super-Admins sehen alle Fahrzeuge, andere nur ihre Organisation
+    const filterOrgId = user.role === UserRole.SUPER_ADMIN ? undefined : organizationId;
+    return this.vehiclesService.findAll(filterOrgId);
   }
 
   /**
@@ -25,8 +31,12 @@ export class VehiclesController {
    * Fahrzeug-Statistiken abrufen (benötigt Auth)
    */
   @Get('stats')
-  getStats(@CurrentUser() user: AuthUser) {
-    return this.vehiclesService.stats();
+  getStats(
+    @CurrentUser() user: AuthUser,
+    @CurrentOrganization() organizationId?: string,
+  ) {
+    const filterOrgId = user.role === UserRole.SUPER_ADMIN ? undefined : organizationId;
+    return this.vehiclesService.stats(filterOrgId);
   }
 
   /**
@@ -46,11 +56,19 @@ export class VehiclesController {
    * POST /vehicles
    * Neues Fahrzeug erstellen (nur für Admins)
    */
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Post()
-  create(@Body() dto: CreateVehicleDto, @CurrentUser() user: AuthUser) {
-    // Optional: user.id mit Fahrzeug verknüpfen
-    return this.vehiclesService.create(dto);
+  create(
+    @Body() dto: CreateVehicleDto,
+    @CurrentUser() user: AuthUser,
+    @CurrentOrganization() organizationId?: string,
+  ) {
+    // Verwende die Organization des Users, außer Super-Admin gibt explizit eine an
+    const orgId = dto.organizationId || organizationId;
+    if (!orgId) {
+      throw new Error('Organization ID is required');
+    }
+    return this.vehiclesService.create({ ...dto, organizationId: orgId });
   }
 
   /**

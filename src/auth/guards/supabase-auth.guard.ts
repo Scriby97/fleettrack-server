@@ -96,6 +96,7 @@ export class SupabaseAuthGuard implements CanActivate {
         email: user.email,
         ...user.user_metadata,
         role: profile.role, // DB-Rolle hat Priorität über metadata
+        organizationId: profile.organizationId, // Organisation des Users
       };
 
       this.logger.debug(`User Rolle: ${request.user.role}`);

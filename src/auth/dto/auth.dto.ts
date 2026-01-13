@@ -1,4 +1,4 @@
-import { IsEmail, IsString, MinLength, IsOptional, IsEnum } from 'class-validator';
+import { IsEmail, IsString, MinLength, IsOptional, IsEnum, IsUUID } from 'class-validator';
 import { UserRole } from '../enums/user-role.enum';
 
 export class SignInDto {
@@ -25,6 +25,10 @@ export class SignUpDto {
   @IsOptional()
   @IsString()
   lastName?: string;
+
+  @IsOptional()
+  @IsUUID()
+  organizationId?: string;
 
   @IsOptional()
   metadata?: any;

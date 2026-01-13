@@ -28,9 +28,10 @@ export class AuthService {
       throw new UnauthorizedException(error.message);
     }
 
-    // Hole User-Profile mit Rolle aus DB
+    // Hole User-Profile mit Rolle und Organization aus DB
     const profile = await this.profileRepo.findOne({
       where: { id: data.user.id },
+      relations: ['organization'],
     });
 
     return {
@@ -39,6 +40,8 @@ export class AuthService {
       user: {
         ...data.user,
         role: profile?.role || UserRole.USER,
+        organizationId: profile?.organizationId,
+        organization: profile?.organization,
       },
     };
   }
@@ -51,7 +54,19 @@ export class AuthService {
     password: string,
     metadata?: any,
     role: UserRole = UserRole.USER,
+    organizationId?: string,
   ) {
+    // Prüfe ob User bereits existiert
+    const existingProfile = await this.profileRepo.findOne({ 
+      where: { email: email.toLowerCase() } 
+    });
+    
+    if (existingProfile) {
+      throw new UnauthorizedException(
+        'A user with this email address already exists. Please use a different email or contact support.',
+      );
+    }
+
     const supabase = this.supabaseService.getClient();
 
     const { data, error } = await supabase.auth.signUp({
@@ -61,6 +76,7 @@ export class AuthService {
         data: {
           ...metadata,
           role,
+          organizationId,
         },
       },
     });
@@ -75,6 +91,7 @@ export class AuthService {
         id: data.user.id,
         email: data.user.email!,
         role,
+        organizationId,
         firstName: metadata?.firstName,
         lastName: metadata?.lastName,
       });
@@ -172,15 +189,25 @@ export class AuthService {
 
   /**
    * Alle User mit Profilen abrufen (nur für Admins)
+   * Super-Admins sehen alle User, normale Admins nur ihre Organization
    */
-  async getAllUsers() {
-    return this.profileRepo.find();
+  async getAllUsers(organizationId?: string) {
+    if (organizationId) {
+      return this.profileRepo.find({
+        where: { organizationId },
+        relations: ['organization'],
+      });
+    }
+    return this.profileRepo.find({ relations: ['organization'] });
   }
 
   /**
    * User-Profile abrufen
    */
   async getUserProfile(userId: string) {
-    return this.profileRepo.findOne({ where: { id: userId } });
+    return this.profileRepo.findOne({
+      where: { id: userId },
+      relations: ['organization'],
+    });
   }
 }
