@@ -33,10 +33,14 @@ FleetTrack Backend - Multi-tenant fleet management system with NestJS, Supabase 
 - 📊 **RESTful API:** Complete CRUD operations with TypeORM
 
 ### Documentation
-- [Invite Registration Flow](./INVITE_REGISTRATION_FLOW.md) - Complete guide for invite-based user registration
-- [Super Admin Guide](./SUPER_ADMIN_GUIDE.md) - Guide for creating and managing organizations
-- [Auth & Roles](./AUTH_README.md) - Authentication and authorization details
-- [Roles System](./ROLES_README.md) - Role-based access control
+- [🚀 Deployment Guide](./DEPLOYMENT.md) - **Production deployment to Render & Vercel**
+- [📨 Invite Registration Flow](./INVITE_REGISTRATION_FLOW.md) - Complete guide for invite-based user registration
+- [👑 Super Admin Guide](./SUPER_ADMIN_GUIDE.md) - Guide for creating and managing organizations
+- [🔒 RLS Migration](./RLS_MIGRATION.md) - Row Level Security setup for Supabase
+- [🔐 Auth & Roles](./AUTH_README.md) - Authentication and authorization details
+- [👥 Roles System](./ROLES_README.md) - Role-based access control
+- [🏢 Organization Management](./ORGANIZATION_MANAGEMENT.md) - Multi-tenancy implementation
+- [⚡ Quick Start](./QUICK_START.md) - Setup first organization
 
 ## Project setup
 
@@ -72,16 +76,26 @@ $ npm run test:cov
 
 ## Deployment
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+**Production Environment:**
+- Backend: https://fleettrack-server.onrender.com/
+- Frontend: https://fleettrack-frontend.vercel.app/
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+📖 **[Complete Deployment Guide](./DEPLOYMENT.md)** - Step-by-step instructions for:
+- Render.com backend deployment
+- Vercel frontend deployment
+- Environment variables configuration
+- Database migration checklist
+- Troubleshooting
 
+Quick deploy:
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+# Commit and push (auto-deploys to Render & Vercel)
+git add .
+git commit -m "Deploy update"
+git push origin main
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+For detailed deployment instructions, see [DEPLOYMENT.md](./DEPLOYMENT.md).
 
 ## Resources
 
