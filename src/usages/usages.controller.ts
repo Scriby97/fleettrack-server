@@ -5,6 +5,7 @@ import { UpdateUsageDto } from './dto/update-usage.dto';
 import { UsageEntity } from './usage.entity';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthUser } from '../auth/decorators/current-user.decorator';
+import { CurrentOrganization } from '../auth/decorators/current-organization.decorator';
 import { UserRole } from '../auth/enums/user-role.enum';
 
 @Controller('usages')
@@ -14,13 +15,18 @@ export class UsagesController {
   /**
    * GET /usages
    * Alle Nutzungen abrufen (benötigt Auth)
-   * Admins sehen alle Usages, normale User nur ihre eigenen
+   * Super-Admins sehen alle Usages (oder gefiltert nach ausgewählter Org)
+   * Admins/Users sehen nur Usages ihrer Organisation
    */
   @Get()
-  getAll(@CurrentUser() user: AuthUser) {
-    // Admins sehen alle Usages, normale User nur ihre eigenen
-    const isAdmin = user.role === UserRole.ADMIN;
-    return this.usagesService.findAll(isAdmin ? undefined : user.id);
+  getAll(
+    @CurrentUser() user: AuthUser,
+    @CurrentOrganization() organizationId?: string,
+  ) {
+    // Super-Admins können alle sehen oder eine bestimmte Org auswählen
+    // Andere Rollen sehen nur ihre eigene Organisation
+    const filterOrgId = user.role === UserRole.SUPER_ADMIN ? undefined : organizationId;
+    return this.usagesService.findAll(filterOrgId);
   }
 
   /**

@@ -10,10 +10,20 @@ export class UsagesService {
     private readonly repo: Repository<UsageEntity>,
   ) {}
 
-  async findAll(creatorId?: string): Promise<UsageEntity[]> {
-    if (creatorId) {
-      return this.repo.find({ where: { creatorId } });
+  /**
+   * Find all usages, optionally filtered by organizationId
+   * Uses JOIN with vehicles table since usages don't have direct organizationId
+   */
+  async findAll(organizationId?: string): Promise<UsageEntity[]> {
+    if (organizationId) {
+      // Filter by organizationId through vehicles table
+      return this.repo
+        .createQueryBuilder('usage')
+        .innerJoin('usage.vehicle', 'vehicle')
+        .where('vehicle.organizationId = :organizationId', { organizationId })
+        .getMany();
     }
+    // Super Admin without organization filter sees all usages
     return this.repo.find();
   }
 
