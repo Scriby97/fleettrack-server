@@ -32,8 +32,23 @@ export class OrganizationsController {
 
   @Post()
   @Roles(UserRole.SUPER_ADMIN) // Nur Super-Admins können Organisationen erstellen
-  create(@Body() createOrganizationDto: CreateOrganizationDto) {
-    return this.organizationsService.create(createOrganizationDto);
+  async create(@Body() createOrganizationDto: CreateOrganizationDto) {
+    const result = await this.organizationsService.create(
+      createOrganizationDto,
+    );
+
+    // Generiere Invite-Link
+    const inviteLink = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/invite/accept?token=${result.inviteToken}`;
+
+    return {
+      organization: result.organization,
+      invite: {
+        token: result.inviteToken,
+        link: inviteLink,
+        email: createOrganizationDto.adminEmail,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 Tage
+      },
+    };
   }
 
   @Get()

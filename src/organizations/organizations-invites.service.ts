@@ -27,7 +27,7 @@ export class OrganizationsInvitesService {
   async createInvite(
     organizationId: string,
     createInviteDto: CreateInviteDto,
-    invitedBy: string,
+    invitedBy?: string,
   ): Promise<OrganizationInviteEntity> {
     // Prüfe ob Organisation existiert
     const organization = await this.organizationRepository.findOne({

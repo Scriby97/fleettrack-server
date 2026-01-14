@@ -23,7 +23,20 @@
 
 ## Description
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+FleetTrack Backend - Multi-tenant fleet management system with NestJS, Supabase Auth, and TypeORM.
+
+### Features
+- 🏢 **Multi-Tenancy:** Organization-based data isolation
+- 🔐 **Authentication:** Supabase Auth with role-based access control (super_admin, admin, user)
+- 📨 **Invite System:** Token-based user onboarding
+- 🚗 **Fleet Management:** Vehicles, usage tracking, operating hours
+- 📊 **RESTful API:** Complete CRUD operations with TypeORM
+
+### Documentation
+- [Invite Registration Flow](./INVITE_REGISTRATION_FLOW.md) - Complete guide for invite-based user registration
+- [Super Admin Guide](./SUPER_ADMIN_GUIDE.md) - Guide for creating and managing organizations
+- [Auth & Roles](./AUTH_README.md) - Authentication and authorization details
+- [Roles System](./ROLES_README.md) - Role-based access control
 
 ## Project setup
 

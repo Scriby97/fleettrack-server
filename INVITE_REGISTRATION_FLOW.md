@@ -614,3 +614,484 @@ async function deleteInvite(inviteId: string) {
    // Alle abgelaufenen Invites
    const expiredInvites = invites.filter(i => getInviteStatus(i) === 'expired');
    ```
+
+---
+
+## 🏢 Super Admin: Neue Organization erstellen
+
+### Überblick
+Nur **Super Admins** können neue Organizations erstellen. Dabei wird automatisch ein Invite für den ersten Admin der neuen Organization generiert.
+
+### POST `/organizations` - Neue Organization erstellen
+
+**Authentifizierung:** Super Admin Token erforderlich
+
+Request:
+```http
+POST http://localhost:3001/organizations
+Authorization: Bearer <super-admin-token>
+Content-Type: application/json
+
+{
+  "name": "Acme Transportation GmbH",
+  "adminEmail": "admin@acme-transport.com",
+  "adminFirstName": "Max",
+  "adminLastName": "Mustermann",
+  "adminRole": "admin",
+  "subdomain": "acme",
+  "contactEmail": "info@acme-transport.com"
+}
+```
+
+**Request Body Felder:**
+
+| Feld | Typ | Pflicht | Beschreibung |
+|------|-----|---------|--------------|
+| `name` | string | ✅ Ja | Name der Organization (min. 2 Zeichen) |
+| `adminEmail` | string | ✅ Ja | Email des ersten Admins |
+| `adminFirstName` | string | ❌ Nein | Vorname des Admins (optional) |
+| `adminLastName` | string | ❌ Nein | Nachname des Admins (optional) |
+| `adminRole` | string | ❌ Nein | Rolle des Admins: `admin` (default) oder `super_admin` |
+| `subdomain` | string | ❌ Nein | Subdomain für die Organization (z.B. für Multi-Tenant URLs) |
+| `contactEmail` | string | ❌ Nein | Kontakt-Email der Organization |
+
+Response (Success):
+```json
+{
+  "organization": {
+    "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "name": "Acme Transportation GmbH",
+    "subdomain": "acme",
+    "contactEmail": "info@acme-transport.com",
+    "isActive": true,
+    "createdAt": "2026-01-13T10:30:00.000Z",
+    "updatedAt": "2026-01-13T10:30:00.000Z"
+  },
+  "invite": {
+    "token": "a1b2c3d4e5f67890abcdef1234567890a1b2c3d4e5f67890abcdef12",
+    "link": "https://app.fleettrack.com/invite/accept?token=a1b2c3d4e5f67890abcdef1234567890a1b2c3d4e5f67890abcdef12",
+    "email": "admin@acme-transport.com",
+    "expiresAt": "2026-01-20T10:30:00.000Z"
+  }
+}
+```
+
+### TypeScript Interface für Frontend
+
+```typescript
+interface CreateOrganizationRequest {
+  name: string;
+  adminEmail: string;
+  adminFirstName?: string;
+  adminLastName?: string;
+  adminRole?: 'admin' | 'super_admin';
+  subdomain?: string;
+  contactEmail?: string;
+}
+
+interface CreateOrganizationResponse {
+  organization: {
+    id: string;
+    name: string;
+    subdomain?: string;
+    contactEmail?: string;
+    isActive: boolean;
+    createdAt: string;
+    updatedAt: string;
+  };
+  invite: {
+    token: string;
+    link: string;
+    email: string;
+    expiresAt: string;
+  };
+}
+
+async function createOrganization(
+  data: CreateOrganizationRequest,
+  superAdminToken: string
+): Promise<CreateOrganizationResponse> {
+  const response = await fetch('/organizations', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${superAdminToken}`
+    },
+    body: JSON.stringify(data),
+  });
+  
+  if (!response.ok) {
+    throw new Error('Failed to create organization');
+  }
+  
+  return response.json();
+}
+```
+
+### Frontend UI: Super Admin Dashboard
+
+#### Neue Organization erstellen - Formular
+
+```tsx
+// React Component Beispiel
+function CreateOrganizationForm() {
+  const [formData, setFormData] = useState<CreateOrganizationRequest>({
+    name: '',
+    adminEmail: '',
+    adminFirstName: '',
+    adminLastName: '',
+    adminRole: 'admin',
+    subdomain: '',
+    contactEmail: '',
+  });
+  const [result, setResult] = useState<CreateOrganizationResponse | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    try {
+      const token = getAccessToken(); // Hol Super Admin Token
+      const response = await createOrganization(formData, token);
+      setResult(response);
+      
+      // Zeige Success-Message mit Invite-Link
+      alert(`Organization "${response.organization.name}" erfolgreich erstellt!`);
+    } catch (error) {
+      alert('Fehler beim Erstellen der Organization: ' + error.message);
+    }
+  };
+
+  return (
+    <div>
+      <h2>Neue Organization erstellen</h2>
+      
+      <form onSubmit={handleSubmit}>
+        {/* Organization Details */}
+        <fieldset>
+          <legend>Organization Details</legend>
+          
+          <label>
+            Organization Name *
+            <input
+              type="text"
+              value={formData.name}
+              onChange={e => setFormData({ ...formData, name: e.target.value })}
+              required
+              minLength={2}
+              placeholder="z.B. Acme Transportation GmbH"
+            />
+          </label>
+
+          <label>
+            Subdomain (optional)
+            <input
+              type="text"
+              value={formData.subdomain}
+              onChange={e => setFormData({ ...formData, subdomain: e.target.value })}
+              placeholder="z.B. acme (für acme.fleettrack.com)"
+            />
+          </label>
+
+          <label>
+            Kontakt-Email (optional)
+            <input
+              type="email"
+              value={formData.contactEmail}
+              onChange={e => setFormData({ ...formData, contactEmail: e.target.value })}
+              placeholder="info@firma.com"
+            />
+          </label>
+        </fieldset>
+
+        {/* Admin User Details */}
+        <fieldset>
+          <legend>Erster Admin-User</legend>
+          
+          <label>
+            Admin Email *
+            <input
+              type="email"
+              value={formData.adminEmail}
+              onChange={e => setFormData({ ...formData, adminEmail: e.target.value })}
+              required
+              placeholder="admin@firma.com"
+            />
+          </label>
+
+          <label>
+            Vorname (optional)
+            <input
+              type="text"
+              value={formData.adminFirstName}
+              onChange={e => setFormData({ ...formData, adminFirstName: e.target.value })}
+              placeholder="Max"
+            />
+          </label>
+
+          <label>
+            Nachname (optional)
+            <input
+              type="text"
+              value={formData.adminLastName}
+              onChange={e => setFormData({ ...formData, adminLastName: e.target.value })}
+              placeholder="Mustermann"
+            />
+          </label>
+
+          <label>
+            Admin Rolle
+            <select
+              value={formData.adminRole}
+              onChange={e => setFormData({ ...formData, adminRole: e.target.value as 'admin' | 'super_admin' })}
+            >
+              <option value="admin">Admin (Standard)</option>
+              <option value="super_admin">Super Admin (volle Rechte)</option>
+            </select>
+          </label>
+        </fieldset>
+
+        <button type="submit">Organization erstellen</button>
+      </form>
+
+      {/* Success Message mit Invite-Link */}
+      {result && (
+        <div className="success-message">
+          <h3>✅ Organization erfolgreich erstellt!</h3>
+          
+          <div className="org-details">
+            <h4>Organization Details:</h4>
+            <p><strong>Name:</strong> {result.organization.name}</p>
+            <p><strong>ID:</strong> {result.organization.id}</p>
+            {result.organization.subdomain && (
+              <p><strong>Subdomain:</strong> {result.organization.subdomain}</p>
+            )}
+          </div>
+
+          <div className="invite-details">
+            <h4>Admin Invite:</h4>
+            <p><strong>Email:</strong> {result.invite.email}</p>
+            <p><strong>Läuft ab:</strong> {new Date(result.invite.expiresAt).toLocaleString('de-DE')}</p>
+            
+            <div className="invite-link-box">
+              <label>Invite-Link (an Admin senden):</label>
+              <input
+                type="text"
+                value={result.invite.link}
+                readOnly
+                onClick={e => e.currentTarget.select()}
+              />
+              <button onClick={() => {
+                navigator.clipboard.writeText(result.invite.link);
+                alert('Link in Zwischenablage kopiert!');
+              }}>
+                📋 Link kopieren
+              </button>
+            </div>
+
+            <div className="actions">
+              <button onClick={() => {
+                // Email-Client öffnen mit vorgefertigtem Text
+                const subject = encodeURIComponent(`Einladung zu ${result.organization.name}`);
+                const body = encodeURIComponent(
+                  `Hallo,\n\n` +
+                  `Sie wurden als Administrator für die Organization "${result.organization.name}" eingeladen.\n\n` +
+                  `Bitte klicken Sie auf den folgenden Link, um Ihr Konto zu erstellen:\n` +
+                  `${result.invite.link}\n\n` +
+                  `Der Link ist gültig bis ${new Date(result.invite.expiresAt).toLocaleString('de-DE')}.\n\n` +
+                  `Mit freundlichen Grüßen\n` +
+                  `FleetTrack Team`
+                );
+                window.location.href = `mailto:${result.invite.email}?subject=${subject}&body=${body}`;
+              }}>
+                📧 Email-Entwurf erstellen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+### GET `/organizations` - Alle Organizations auflisten
+
+**Nur für Super Admins**
+
+Request:
+```http
+GET http://localhost:3001/organizations
+Authorization: Bearer <super-admin-token>
+```
+
+Response:
+```json
+[
+  {
+    "id": "3c1479e0-a291-460b-8bb7-bc00e45c2cd0",
+    "name": "Default Organization",
+    "isActive": true,
+    "createdAt": "2026-01-01T00:00:00.000Z",
+    "updatedAt": "2026-01-01T00:00:00.000Z"
+  },
+  {
+    "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "name": "Acme Transportation GmbH",
+    "subdomain": "acme",
+    "contactEmail": "info@acme-transport.com",
+    "isActive": true,
+    "createdAt": "2026-01-13T10:30:00.000Z",
+    "updatedAt": "2026-01-13T10:30:00.000Z"
+  }
+]
+```
+
+### Frontend: Organizations-Liste für Super Admin
+
+```tsx
+function OrganizationsList() {
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
+
+  useEffect(() => {
+    fetchOrganizations();
+  }, []);
+
+  const fetchOrganizations = async () => {
+    const response = await fetch('/organizations', {
+      headers: {
+        'Authorization': `Bearer ${getAccessToken()}`
+      }
+    });
+    const data = await response.json();
+    setOrganizations(data);
+  };
+
+  return (
+    <div>
+      <h2>Alle Organizations</h2>
+      
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Subdomain</th>
+            <th>Kontakt-Email</th>
+            <th>Status</th>
+            <th>Erstellt</th>
+            <th>Aktionen</th>
+          </tr>
+        </thead>
+        <tbody>
+          {organizations.map(org => (
+            <tr key={org.id}>
+              <td>{org.name}</td>
+              <td>{org.subdomain || '-'}</td>
+              <td>{org.contactEmail || '-'}</td>
+              <td>
+                <Badge color={org.isActive ? 'green' : 'gray'}>
+                  {org.isActive ? 'Aktiv' : 'Inaktiv'}
+                </Badge>
+              </td>
+              <td>
+                {new Date(org.createdAt).toLocaleDateString('de-DE')}
+              </td>
+              <td>
+                <Button onClick={() => viewOrganization(org.id)}>
+                  Details
+                </Button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+```
+
+### Workflow: Neue Organization onboarden
+
+1. **Super Admin** loggt sich ein
+2. Navigiert zu "Organizations" → "Neue Organization erstellen"
+3. Füllt Formular aus:
+   - Organization-Name
+   - Admin-Email
+   - Optional: Vorname, Nachname, Subdomain
+4. Klickt "Organization erstellen"
+5. System erstellt:
+   - ✅ Neue Organization in DB
+   - ✅ Invite für ersten Admin (7 Tage gültig)
+6. Super Admin erhält Invite-Link
+7. Super Admin sendet Link an den zukünftigen Admin (per Email/Chat)
+8. **Admin** öffnet Invite-Link
+9. Admin registriert sich via `/invites/accept`
+10. Admin ist eingeloggt und kann:
+    - Weitere User einladen
+    - Fahrzeuge anlegen
+    - System konfigurieren
+
+### Error Handling
+
+#### Super Admin-Rechte fehlen
+```json
+Status: 403
+{
+  "statusCode": 403,
+  "message": "Forbidden resource"
+}
+```
+
+**Frontend Action:** Zeige Fehler "Sie haben keine Berechtigung, Organizations zu erstellen"
+
+#### Organization-Name bereits vergeben
+```json
+Status: 400
+{
+  "statusCode": 400,
+  "message": "Organization with this name already exists"
+}
+```
+
+**Frontend Action:** Zeige Fehler "Eine Organization mit diesem Namen existiert bereits"
+
+#### Admin-Email bereits verwendet
+```json
+Status: 400
+{
+  "statusCode": 400,
+  "message": "A user with this email address already exists"
+}
+```
+
+**Frontend Action:** Zeige Fehler "Ein User mit dieser Email-Adresse existiert bereits"
+
+### Wichtige Hinweise für Frontend-Team
+
+1. **Super Admin Check:**
+   ```typescript
+   // Nur Super Admins sehen "Organizations erstellen" Button
+   if (currentUser.role === 'super_admin') {
+     // Zeige Navigation/Button
+   }
+   ```
+
+2. **Invite-Link speichern:**
+   - Nach dem Erstellen sollte der Invite-Link in Zwischenablage kopiert werden können
+   - Optional: Email-Integration zum direkten Versenden
+
+3. **Subdomain-Validierung:**
+   ```typescript
+   // Nur Kleinbuchstaben, Zahlen, Bindestriche
+   const subdomainRegex = /^[a-z0-9-]+$/;
+   ```
+
+4. **Success-Feedback:**
+   - Zeige deutlich den generierten Invite-Link
+   - Zeige Ablaufdatum des Invites
+   - Biete "Email-Entwurf erstellen" Button
+
+5. **Environment Variable:**
+   ```typescript
+   // Frontend muss FRONTEND_URL kennen für Invite-Link-Generierung
+   // Backend verwendet: process.env.FRONTEND_URL || 'http://localhost:3000'
+   ```
