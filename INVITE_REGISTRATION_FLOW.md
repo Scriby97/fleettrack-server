@@ -1,4 +1,4 @@
-# Invite-basierte Registrierung - Frontend Implementation Guide
+git # Invite-basierte Registrierung - Frontend Implementation Guide
 
 ## ✅ RICHTIGER FLOW: Registrierung über Invite
 

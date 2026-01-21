@@ -1,6 +1,7 @@
-import { Controller, Get, Post, Body, Delete, Param } from '@nestjs/common';
+import { Controller, Get, Post, Body, Delete, Param, Put } from '@nestjs/common';
 import { VehiclesService } from './vehicles.service';
 import { CreateVehicleDto } from './dto/create-vehicle.dto';
+import { UpdateVehicleDto } from './dto/update-vehicle.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthUser } from '../auth/decorators/current-user.decorator';
 import { CurrentOrganization } from '../auth/decorators/current-organization.decorator';
@@ -69,6 +70,21 @@ export class VehiclesController {
       throw new Error('Organization ID is required');
     }
     return this.vehiclesService.create({ ...dto, organizationId: orgId });
+  }
+
+  /**
+   * PUT /vehicles/:id
+   * Fahrzeug bearbeiten (nur für Admins)
+   */
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Put(':id')
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateVehicleDto,
+    @CurrentUser() user: AuthUser,
+    @CurrentOrganization() organizationId?: string,
+  ) {
+    return this.vehiclesService.update(id, dto, user.role, organizationId);
   }
 
   /**

@@ -1,8 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { VehicleEntity } from './vehicle.entity';
 import { UsageEntity } from '../usages/usage.entity';
+import { UserRole } from '../auth/enums/user-role.enum';
 
 export interface Vehicle {
   id: string;
@@ -106,6 +107,33 @@ export class VehiclesService {
     });
 
     return lastUsage ? lastUsage.endOperatingHours : null;
+  }
+
+  /**
+   * Update a vehicle
+   * Super-Admins can update any vehicle
+   * Regular admins can only update vehicles in their organization
+   */
+  async update(
+    id: string,
+    data: Partial<Vehicle>,
+    userRole?: string,
+    organizationId?: string,
+  ): Promise<Vehicle> {
+    const vehicle = await this.repo.findOne({ where: { id } });
+    
+    if (!vehicle) {
+      throw new NotFoundException(`Vehicle with ID ${id} not found`);
+    }
+
+    // Check authorization: Regular admins can only update vehicles in their organization
+    if (userRole !== UserRole.SUPER_ADMIN && vehicle.organizationId !== organizationId) {
+      throw new ForbiddenException('You can only update vehicles in your organization');
+    }
+
+    // Update the vehicle
+    Object.assign(vehicle, data);
+    return this.repo.save(vehicle);
   }
 }
 
