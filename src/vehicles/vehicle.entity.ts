@@ -21,6 +21,9 @@ export class VehicleEntity {
   @Column()
   snowsatNumber: string;
 
+  @Column({ type: 'boolean', default: false })
+  isRetired: boolean;
+
   @Column({ type: 'uuid' })
   organizationId: string;
 

@@ -90,11 +90,16 @@ export class VehiclesController {
   /**
    * DELETE /vehicles/:id
    * Fahrzeug löschen (nur für Admins)
+   * Fahrzeuge mit Nutzungen werden als ausgemustert markiert,
+   * Fahrzeuge ohne Nutzungen werden permanent gelöscht
    */
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   @Delete(':id')
-  delete(@Param('id') id: string) {
-    // Implementiere delete in Service
-    return { message: 'Fahrzeug gelöscht', id };
+  delete(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthUser,
+    @CurrentOrganization() organizationId?: string,
+  ) {
+    return this.vehiclesService.delete(id, user.role, organizationId);
   }
 }

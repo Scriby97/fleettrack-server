@@ -10,6 +10,7 @@ export interface Vehicle {
   name: string;
   plate: string;
   snowsatNumber: string;
+  isRetired?: boolean;
 }
 
 export interface VehicleStats {
@@ -30,11 +31,18 @@ export class VehiclesService {
     private readonly usageRepo: Repository<UsageEntity>,
   ) {}
 
-  async findAll(organizationId?: string): Promise<Vehicle[]> {
+  async findAll(organizationId?: string, includeRetired = false): Promise<Vehicle[]> {
+    const where: any = {};
+    
     if (organizationId) {
-      return this.repo.find({ where: { organizationId } });
+      where.organizationId = organizationId;
     }
-    return this.repo.find();
+    
+    if (!includeRetired) {
+      where.isRetired = false;
+    }
+    
+    return this.repo.find({ where });
   }
 
   async create(data: Partial<Vehicle> & { organizationId: string }): Promise<Vehicle> {
@@ -134,6 +142,50 @@ export class VehiclesService {
     // Update the vehicle
     Object.assign(vehicle, data);
     return this.repo.save(vehicle);
+  }
+
+  /**
+   * Delete or retire a vehicle
+   * If the vehicle has usages, it will be marked as retired (isRetired = true)
+   * If no usages exist, the vehicle will be permanently deleted
+   */
+  async delete(
+    id: string,
+    userRole?: string,
+    organizationId?: string,
+  ): Promise<{ deleted: boolean; retired: boolean; message: string }> {
+    const vehicle = await this.repo.findOne({ where: { id } });
+    
+    if (!vehicle) {
+      throw new NotFoundException(`Vehicle with ID ${id} not found`);
+    }
+
+    // Check authorization: Regular admins can only delete vehicles in their organization
+    if (userRole !== UserRole.SUPER_ADMIN && vehicle.organizationId !== organizationId) {
+      throw new ForbiddenException('You can only delete vehicles in your organization');
+    }
+
+    // Check if vehicle has any usages
+    const usageCount = await this.usageRepo.count({ where: { vehicleId: id } });
+
+    if (usageCount > 0) {
+      // Vehicle has usages, mark as retired instead of deleting
+      vehicle.isRetired = true;
+      await this.repo.save(vehicle);
+      return {
+        deleted: false,
+        retired: true,
+        message: `Vehicle has ${usageCount} usage(s) and was marked as retired instead of being deleted`,
+      };
+    } else {
+      // No usages, safe to delete permanently
+      await this.repo.remove(vehicle);
+      return {
+        deleted: true,
+        retired: false,
+        message: 'Vehicle permanently deleted',
+      };
+    }
   }
 }
 
