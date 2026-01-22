@@ -20,6 +20,7 @@ export interface VehicleStats {
   snowsatNumber: string;
   totalWorkHours: number; // hours
   totalFuelLiters: number;
+  isRetired: boolean;
 }
 
 @Injectable()
@@ -65,10 +66,11 @@ export class VehiclesService {
           'v.name as name',
           'v.plate as plate',
           'v.snowsatNumber as "snowsatNumber"',
+          'v.isRetired as "isRetired"',
           'COALESCE(SUM(u.endOperatingHours - u.startOperatingHours), 0) as "totalWorkHours"',
           'COALESCE(SUM(u.fuelLitersRefilled), 0) as "totalFuelLiters"',
         ])
-        .groupBy('v.id, v.name, v.plate, v.snowsatNumber');
+        .groupBy('v.id, v.name, v.plate, v.snowsatNumber, v.isRetired');
 
       // Filter by organization if provided
       if (organizationId) {
@@ -94,6 +96,7 @@ export class VehiclesService {
         name: r.name,
         plate: r.plate,
         snowsatNumber: r.snowsatNumber,
+        isRetired: r.isRetired || false,
         totalWorkHours: Number(r.totalWorkHours) || 0,
         totalFuelLiters: Number(r.totalFuelLiters) || 0,
       }));

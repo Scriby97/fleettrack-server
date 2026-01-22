@@ -27,6 +27,38 @@ export class UsagesService {
     return this.repo.find();
   }
 
+  /**
+   * Find all usages with vehicle data included
+   * Returns usages with nested vehicle information (id, name, plate)
+   */
+  async findAllWithVehicles(organizationId?: string): Promise<any[]> {
+    const queryBuilder = this.repo
+      .createQueryBuilder('usage')
+      .innerJoinAndSelect('usage.vehicle', 'vehicle')
+      .orderBy('usage.creationDate', 'DESC');
+
+    if (organizationId) {
+      queryBuilder.where('vehicle.organizationId = :organizationId', { organizationId });
+    }
+
+    const usages = await queryBuilder.getMany();
+
+    // Transform to match expected response format
+    return usages.map(usage => ({
+      id: usage.id,
+      vehicleId: usage.vehicleId,
+      startOperatingHours: usage.startOperatingHours,
+      endOperatingHours: usage.endOperatingHours,
+      fuelLitersRefilled: usage.fuelLitersRefilled,
+      creationDate: usage.creationDate,
+      vehicle: {
+        id: usage.vehicle.id,
+        name: usage.vehicle.name,
+        plate: usage.vehicle.plate,
+      },
+    }));
+  }
+
   // Accept a DeepPartial<UsageEntity> so callers (controllers or other services)
   // can pass either a DTO or a partially-built entity.
   async create(data: DeepPartial<UsageEntity>): Promise<UsageEntity> {
