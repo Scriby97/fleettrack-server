@@ -30,8 +30,10 @@ export class UsagesService {
   /**
    * Find all usages with vehicle data included
    * Returns usages with nested vehicle information (id, name, plate)
+   * @param organizationId - Filter by organization
+   * @param creatorId - Filter by creator (for regular users)
    */
-  async findAllWithVehicles(organizationId?: string): Promise<any[]> {
+  async findAllWithVehicles(organizationId?: string, creatorId?: string): Promise<any[]> {
     const queryBuilder = this.repo
       .createQueryBuilder('usage')
       .innerJoinAndSelect('usage.vehicle', 'vehicle')
@@ -39,6 +41,11 @@ export class UsagesService {
 
     if (organizationId) {
       queryBuilder.where('vehicle.organizationId = :organizationId', { organizationId });
+    }
+
+    // If creatorId is provided, filter by creator (for regular users)
+    if (creatorId) {
+      queryBuilder.andWhere('usage.creatorId = :creatorId', { creatorId });
     }
 
     const usages = await queryBuilder.getMany();

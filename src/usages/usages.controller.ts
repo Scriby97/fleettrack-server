@@ -16,17 +16,30 @@ export class UsagesController {
    * GET /usages/with-vehicles
    * Alle Nutzungen mit Fahrzeug-Daten abrufen (benötigt Auth)
    * Super-Admins sehen alle Usages (oder gefiltert nach ausgewählter Org)
-   * Admins/Users sehen nur Usages ihrer Organisation
+   * Admins sehen alle Usages ihrer Organisation
+   * Normale Users sehen nur ihre eigenen Usages
    */
   @Get('with-vehicles')
   async getAllWithVehicles(
     @CurrentUser() user: AuthUser,
     @CurrentOrganization() organizationId?: string,
   ) {
-    // Super-Admins können alle sehen oder eine bestimmte Org auswählen
-    // Andere Rollen sehen nur ihre eigene Organisation
-    const filterOrgId = user.role === UserRole.SUPER_ADMIN ? undefined : organizationId;
-    const usages = await this.usagesService.findAllWithVehicles(filterOrgId);
+    let filterOrgId: string | undefined;
+    let filterCreatorId: string | undefined;
+
+    if (user.role === UserRole.SUPER_ADMIN) {
+      // Super-Admins können alle sehen oder eine bestimmte Org auswählen (über organizationId)
+      filterOrgId = organizationId; // undefined wenn keine Org ausgewählt
+    } else if (user.role === UserRole.ADMIN) {
+      // Admins sehen alle Usages ihrer Organisation
+      filterOrgId = organizationId;
+    } else {
+      // Normale Users sehen nur ihre eigenen Usages
+      filterOrgId = organizationId;
+      filterCreatorId = user.id;
+    }
+
+    const usages = await this.usagesService.findAllWithVehicles(filterOrgId, filterCreatorId);
     return { usages };
   }
 
