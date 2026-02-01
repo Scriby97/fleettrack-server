@@ -21,10 +21,10 @@ export class UsageEntity {
   @JoinColumn({ name: 'creatorId' })
   creator: UserProfileEntity;
 
-  @Column({ type: 'integer' })
+  @Column({ type: 'decimal', precision: 10, scale: 1 })
   startOperatingHours: number;
 
-  @Column({ type: 'integer' })
+  @Column({ type: 'decimal', precision: 10, scale: 1 })
   endOperatingHours: number;
 
   @Column({ type: 'integer', default: 0 })

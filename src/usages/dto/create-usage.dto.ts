@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsNumber, Min, IsDate } from 'class-validator';
+import { IsString, IsOptional, IsNumber, Min, IsDate, IsPositive, Matches } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreateUsageDto {
@@ -6,13 +6,13 @@ export class CreateUsageDto {
   vehicleId: string;
 
   @Type(() => Number)
-  @IsNumber()
+  @IsNumber({ maxDecimalPlaces: 1 })
   @Min(0)
   startOperatingHours: number;
 
   @Type(() => Number)
-  @IsNumber()
-  @Min(0)
+  @IsNumber({ maxDecimalPlaces: 1 })
+  @IsPositive()
   @IsOptional()
   endOperatingHours?: number;
 
