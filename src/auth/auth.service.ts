@@ -63,7 +63,7 @@ export class AuthService {
     
     if (existingProfile) {
       throw new UnauthorizedException(
-        'A user with this email address already exists. Please use a different email or contact support.',
+        'Ein Benutzer mit dieser E-Mail-Adresse existiert bereits. Bitte verwenden Sie eine andere E-Mail oder kontaktieren Sie den Support.',
       );
     }
 
