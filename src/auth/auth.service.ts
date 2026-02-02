@@ -14,6 +14,36 @@ export class AuthService {
   ) {}
 
   /**
+   * Übersetzt Supabase-Fehlermeldungen ins Deutsche
+   */
+  private translateSupabaseError(errorMessage: string): string {
+    const errorTranslations: { [key: string]: string } = {
+      'Email not confirmed': 'E-Mail-Adresse wurde noch nicht bestätigt. Bitte überprüfen Sie Ihr Postfach.',
+      'Invalid login credentials': 'Ungültige Anmeldedaten. Bitte überprüfen Sie E-Mail und Passwort.',
+      'User already registered': 'Benutzer ist bereits registriert.',
+      'Password should be at least 6 characters': 'Das Passwort muss mindestens 6 Zeichen lang sein.',
+      'Unable to validate email address': 'E-Mail-Adresse konnte nicht validiert werden.',
+      'Invalid email': 'Ungültige E-Mail-Adresse.',
+      'Signup requires a valid password': 'Registrierung erfordert ein gültiges Passwort.',
+      'Invalid Refresh Token': 'Ungültiger Refresh-Token. Bitte melden Sie sich erneut an.',
+      'User not found': 'Benutzer nicht gefunden.',
+      'Email rate limit exceeded': 'Zu viele E-Mail-Anfragen. Bitte versuchen Sie es später erneut.',
+      'Invalid token': 'Ungültiger Token.',
+      'Token has expired': 'Token ist abgelaufen. Bitte melden Sie sich erneut an.',
+    };
+
+    // Suche nach passender Übersetzung
+    for (const [englishError, germanError] of Object.entries(errorTranslations)) {
+      if (errorMessage.includes(englishError)) {
+        return germanError;
+      }
+    }
+
+    // Falls keine Übersetzung gefunden wurde, gebe die Original-Nachricht zurück
+    return errorMessage;
+  }
+
+  /**
    * Login mit Email und Passwort
    */
   async signIn(email: string, password: string) {
@@ -25,7 +55,7 @@ export class AuthService {
     });
 
     if (error) {
-      throw new UnauthorizedException(error.message);
+      throw new UnauthorizedException(this.translateSupabaseError(error.message));
     }
 
     // Hole User-Profile mit Rolle und Organization aus DB
@@ -82,7 +112,7 @@ export class AuthService {
     });
 
     if (error) {
-      throw new UnauthorizedException(error.message);
+      throw new UnauthorizedException(this.translateSupabaseError(error.message));
     }
 
     // Erstelle User-Profile in lokaler DB
@@ -116,7 +146,7 @@ export class AuthService {
     });
 
     if (error) {
-      throw new UnauthorizedException(error.message);
+      throw new UnauthorizedException(this.translateSupabaseError(error.message));
     }
 
     return {
@@ -133,7 +163,7 @@ export class AuthService {
     const { error } = await supabase.auth.signOut();
 
     if (error) {
-      throw new UnauthorizedException(error.message);
+      throw new UnauthorizedException(this.translateSupabaseError(error.message));
     }
 
     return { message: 'Erfolgreich abgemeldet' };
@@ -148,7 +178,7 @@ export class AuthService {
     const { error } = await supabase.auth.resetPasswordForEmail(email);
 
     if (error) {
-      throw new UnauthorizedException(error.message);
+      throw new UnauthorizedException(this.translateSupabaseError(error.message));
     }
 
     return { message: 'Passwort-Reset Email versendet' };
@@ -165,7 +195,7 @@ export class AuthService {
     });
 
     if (error) {
-      throw new UnauthorizedException(error.message);
+      throw new UnauthorizedException(this.translateSupabaseError(error.message));
     }
 
     return { message: 'Passwort erfolgreich aktualisiert' };
