@@ -24,6 +24,18 @@ export class VehicleEntity {
   @Column({ type: 'boolean', default: false })
   isRetired: boolean;
 
+  @Column({ type: 'text', nullable: true })
+  location?: string;
+
+  @Column({ type: 'text', nullable: true })
+  vehicleType?: string;
+
+  @Column({ type: 'text', nullable: true })
+  fuelType?: string;
+
+  @Column({ type: 'text', nullable: true })
+  notes?: string;
+
   @Column({ type: 'uuid' })
   organizationId: string;
 
