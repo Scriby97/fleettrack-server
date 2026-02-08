@@ -129,7 +129,7 @@ Die Felder `startOperatingHours` und `endOperatingHours` wurden aktualisiert, um
   "startOperatingHours": 1234.5,
   "endOperatingHours": 1256.8,
   "fuelLitersRefilled": 50,
-  "creationDate": "2026-02-01T10:30:00Z"
+  "usageDate": "2026-02-01T10:30:00Z"
 }
 
 // Beispiel 2: Erste Nutzung eines neuen Fahrzeugs (startOperatingHours ist 0)
@@ -138,7 +138,7 @@ Die Felder `startOperatingHours` und `endOperatingHours` wurden aktualisiert, um
   "startOperatingHours": 0,
   "endOperatingHours": 15.5,
   "fuelLitersRefilled": 100,
-  "creationDate": "2026-02-01T10:30:00Z"
+  "usageDate": "2026-02-01T10:30:00Z"
 }
 ```
 
@@ -150,7 +150,7 @@ Die Felder `startOperatingHours` und `endOperatingHours` wurden aktualisiert, um
   "startOperatingHours": 1234.5,
   "endOperatingHours": 1256.8,
   "fuelLitersRefilled": 50,
-  "creationDate": "2026-02-01T10:30:00Z"
+  "usageDate": "2026-02-01T10:30:00Z"
 }
 ```
 

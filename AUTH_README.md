@@ -160,7 +160,7 @@ Content-Type: application/json
   "startOperatingHours": 100,
   "endOperatingHours": 105,
   "fuelLitersRefilled": 50,
-  "creationDate": "2025-12-23T10:00:00Z"
+  "usageDate": "2025-12-23T10:00:00Z"
 }
 ```
 

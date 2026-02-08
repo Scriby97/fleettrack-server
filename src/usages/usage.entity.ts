@@ -31,5 +31,5 @@ export class UsageEntity {
   fuelLitersRefilled: number;
 
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
-  creationDate: Date;
+  usageDate: Date;
 }

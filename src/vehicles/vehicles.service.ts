@@ -114,7 +114,7 @@ export class VehiclesService {
   async getLastOperatingHours(vehicleId: string): Promise<number | null> {
     const lastUsage = await this.usageRepo.findOne({
       where: { vehicleId },
-      order: { creationDate: 'DESC' },
+      order: { usageDate: 'DESC' },
     });
 
     return lastUsage ? lastUsage.endOperatingHours : null;

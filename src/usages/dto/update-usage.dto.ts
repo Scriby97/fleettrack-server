@@ -27,5 +27,5 @@ export class UpdateUsageDto {
   @Type(() => Date)
   @IsDate()
   @IsOptional()
-  creationDate?: Date;
+  usageDate?: Date;
 }

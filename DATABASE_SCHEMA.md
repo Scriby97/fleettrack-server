@@ -52,7 +52,7 @@
                   │ startOperatingHours    │  │   │
                   │ endOperatingHours      │  │   │
                   │ fuelLitersRefilled     │  │   │
-                  │ creationDate           │  │   │
+                  │ usageDate              │  │   │
                   └────────────────────────┘  │   │
                                               │   │
                            ┌──────────────────┘   │
@@ -144,7 +144,7 @@ CREATE INDEX idx_users_organization ON user_profiles(organizationId);
 -- Usages
 CREATE INDEX idx_usages_vehicle ON usages(vehicleId);
 CREATE INDEX idx_usages_creator ON usages(creatorId);
-CREATE INDEX idx_usages_creation_date ON usages(creationDate);
+CREATE INDEX idx_usages_usage_date ON usages(usageDate);
 
 -- Organization Invites
 CREATE INDEX idx_invites_token ON organization_invites(token);
