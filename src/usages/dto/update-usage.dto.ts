@@ -28,4 +28,9 @@ export class UpdateUsageDto {
   @IsDate()
   @IsOptional()
   usageDate?: Date;
+
+  @Type(() => Number)
+  @IsNumber()
+  @IsOptional()
+  creationDate?: number;
 }

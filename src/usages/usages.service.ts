@@ -37,7 +37,7 @@ export class UsagesService {
     const queryBuilder = this.repo
       .createQueryBuilder('usage')
       .innerJoinAndSelect('usage.vehicle', 'vehicle')
-      .orderBy('usage.usageDate', 'DESC');
+      .orderBy('usage.creationDate', 'DESC');
 
     if (organizationId) {
       queryBuilder.where('vehicle.organizationId = :organizationId', { organizationId });
@@ -57,6 +57,7 @@ export class UsagesService {
       startOperatingHours: usage.startOperatingHours,
       endOperatingHours: usage.endOperatingHours,
       fuelLitersRefilled: usage.fuelLitersRefilled,
+      creationDate: usage.creationDate,
       usageDate: usage.usageDate,
       vehicle: {
         id: usage.vehicle.id,

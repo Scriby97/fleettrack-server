@@ -30,6 +30,16 @@ export class UsageEntity {
   @Column({ type: 'integer', default: 0 })
   fuelLitersRefilled: number;
 
+  @Column({
+    type: 'bigint',
+    default: () => '(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000)::bigint',
+    transformer: {
+      to: (value: number) => value,
+      from: (value: string) => Number(value),
+    },
+  })
+  creationDate: number;
+
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   usageDate: Date;
 }
