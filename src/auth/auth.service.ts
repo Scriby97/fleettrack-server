@@ -243,9 +243,24 @@ export class AuthService {
    * Passwort aktualisieren
    */
   async updatePassword(accessToken: string, newPassword: string) {
-    const supabase = this.supabaseService.getAuthenticatedClient(accessToken);
+    if (!accessToken) {
+      throw new UnauthorizedException('Kein gültiger Authorization Header');
+    }
 
-    const { error } = await supabase.auth.updateUser({
+    const supabase = this.supabaseService.getClient();
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser(accessToken);
+
+    if (userError || !user) {
+      throw new UnauthorizedException(
+        this.translateSupabaseError(userError?.message || 'Ungültiges Token'),
+      );
+    }
+
+    const adminSupabase = this.supabaseService.getAdminClient();
+    const { error } = await adminSupabase.auth.admin.updateUserById(user.id, {
       password: newPassword,
     });
 
