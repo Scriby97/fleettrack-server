@@ -128,4 +128,22 @@ export class AuthController {
   ) {
     return this.authService.updateUserRole(userId, dto.role);
   }
+
+  /**
+   * POST /auth/users/:userId/reset-password
+   * Admin: Passwort-Reset Email an User senden
+   */
+  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Post('users/:userId/reset-password')
+  adminResetPassword(
+    @Param('userId') userId: string,
+    @CurrentUser() user: AuthUser,
+    @CurrentOrganization() organizationId?: string,
+  ) {
+    return this.authService.adminResetPasswordByUserId(
+      userId,
+      user.role,
+      organizationId,
+    );
+  }
 }

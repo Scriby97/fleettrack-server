@@ -183,6 +183,17 @@ curl -X PATCH http://localhost:3001/auth/users/<user-id>/role \
   }'
 ```
 
+### Passwort-Reset Email an User senden
+
+**POST** `/auth/users/:userId/reset-password`
+
+```bash
+curl -X POST http://localhost:3001/auth/users/<user-id>/reset-password \
+  -H "Authorization: Bearer <super-admin-token>"
+```
+
+Hinweis: Admins duerfen nur User ihrer Organization resetten.
+
 ## 📨 Invite-Verwaltung für beliebige Organizations
 
 Super Admins können Invites für jede Organization erstellen:

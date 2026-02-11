@@ -222,7 +222,47 @@ DELETE /organizations/{id}
 
 ---
 
-## 7. 📋 **Checkliste für Frontend-Entwicklung**
+## 7. 🔐 **Passwort-Management (neu)**
+
+### J) User Settings Page
+
+**Route:** `/settings` (eingeloggte User)
+
+**Funktionalitaet:**
+- User kann sein Passwort aendern (eingeloggt erforderlich)
+- Formular: `new_password` + `confirm_password`
+
+**API Call:**
+```typescript
+POST /auth/update-password
+Authorization: Bearer <access_token>
+Body: {
+  new_password: string
+}
+```
+
+### K) Admin User-Reset (in User-Management)
+
+**Route:** `/admin/users` (Admins) / `/super-admin/users` (Super Admins)
+
+**Funktionalitaet:**
+- Admin sieht alle User seiner Organization (inkl. andere Admins)
+- Super Admin sieht alle User systemweit
+- Aktion pro User: "Passwort-Reset senden"
+
+**API Call:**
+```typescript
+POST /auth/users/{userId}/reset-password
+Authorization: Bearer <access_token>
+```
+
+**Regeln:**
+- `admin` darf nur User der eigenen Organization resetten
+- `super_admin` darf alle User resetten
+
+---
+
+## 8. 📋 **Checkliste für Frontend-Entwicklung**
 
 ### Phase 1: Invite-System (MVP)
 - [ ] `/invite/:token` Route erstellen
@@ -246,6 +286,11 @@ DELETE /organizations/{id}
 ### Phase 4: Super-Admin (optional)
 - [ ] Organization-Liste
 - [ ] Organization erstellen/bearbeiten
+
+### Phase 5: Passwort-Management
+- [ ] Settings-Seite mit Passwort-Aenderung
+- [ ] Admin: User-Liste + Passwort-Reset Aktion
+- [ ] Super Admin: User-Liste mit Org-Filter + Passwort-Reset Aktion
 
 ---
 

@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { SupabaseService } from '../supabase/supabase.service';
@@ -41,6 +41,20 @@ export class AuthService {
 
     // Falls keine Übersetzung gefunden wurde, gebe die Original-Nachricht zurück
     return errorMessage;
+  }
+
+  private getResetPasswordRedirectUrl(): string | undefined {
+    const explicit = process.env.FRONTEND_RESET_PASSWORD_URL?.trim();
+    if (explicit) {
+      return explicit;
+    }
+
+    const base = process.env.FRONTEND_URL?.trim();
+    if (!base) {
+      return undefined;
+    }
+
+    return base.endsWith('/') ? `${base}reset-password` : `${base}/reset-password`;
   }
 
   /**
@@ -174,8 +188,49 @@ export class AuthService {
    */
   async resetPassword(email: string) {
     const supabase = this.supabaseService.getClient();
+    const redirectTo = this.getResetPasswordRedirectUrl();
 
-    const { error } = await supabase.auth.resetPasswordForEmail(email);
+    const options = redirectTo ? { redirectTo } : undefined;
+    const { error } = await supabase.auth.resetPasswordForEmail(email, options);
+
+    if (error) {
+      throw new UnauthorizedException(this.translateSupabaseError(error.message));
+    }
+
+    return { message: 'Passwort-Reset Email versendet' };
+  }
+
+  /**
+   * Admin: Passwort-Reset Email an einen User senden
+   * Super-Admins dürfen alle User, Admins nur innerhalb ihrer Organization
+   */
+  async adminResetPasswordByUserId(
+    userId: string,
+    requesterRole: UserRole,
+    requesterOrganizationId?: string,
+  ) {
+    const targetProfile = await this.profileRepo.findOne({ where: { id: userId } });
+
+    if (!targetProfile) {
+      throw new UnauthorizedException('User nicht gefunden');
+    }
+
+    if (
+      requesterRole === UserRole.ADMIN &&
+      requesterOrganizationId &&
+      targetProfile.organizationId !== requesterOrganizationId
+    ) {
+      throw new ForbiddenException('Kein Zugriff auf User außerhalb der Organization');
+    }
+
+    const supabase = this.supabaseService.getClient();
+    const redirectTo = this.getResetPasswordRedirectUrl();
+
+    const options = redirectTo ? { redirectTo } : undefined;
+    const { error } = await supabase.auth.resetPasswordForEmail(
+      targetProfile.email,
+      options,
+    );
 
     if (error) {
       throw new UnauthorizedException(this.translateSupabaseError(error.message));

@@ -15,6 +15,7 @@
    ```env
    SUPABASE_URL=https://your-project.supabase.co
    SUPABASE_ANON_KEY=your-anon-key-here
+  FRONTEND_RESET_PASSWORD_URL=https://fleettrack-frontend.vercel.app/reset-password
    ```
 
 3. **Dependencies installieren**
@@ -88,6 +89,9 @@ Content-Type: application/json
 }
 ```
 
+Hinweis: Dieser Endpoint sendet eine Passwort-Reset Email ("Forgot Password").
+Hinweis: Der Reset-Link nutzt `FRONTEND_RESET_PASSWORD_URL` (falls gesetzt), sonst `FRONTEND_URL` + `/reset-password`.
+
 ### Geschützte Endpoints (benötigen Auth Token)
 
 Alle folgenden Requests benötigen einen Authorization Header:
@@ -118,13 +122,25 @@ Content-Type: application/json
 }
 ```
 
-#### 8. Fahrzeuge abrufen
+Hinweis: Passwort-Aenderung ist nur moeglich, wenn der User eingeloggt ist.
+
+#### 8. Admin: Passwort-Reset Email an User senden
+```http
+POST /auth/users/{userId}/reset-password
+Authorization: Bearer <access_token>
+```
+
+Regeln:
+- `admin` darf nur User der eigenen Organization resetten
+- `super_admin` darf alle User resetten
+
+#### 9. Fahrzeuge abrufen
 ```http
 GET /vehicles
 Authorization: Bearer <access_token>
 ```
 
-#### 9. Fahrzeug erstellen
+#### 10. Fahrzeug erstellen
 ```http
 POST /vehicles
 Authorization: Bearer <access_token>
@@ -137,19 +153,19 @@ Content-Type: application/json
 }
 ```
 
-#### 10. Fahrzeug-Statistiken
+#### 11. Fahrzeug-Statistiken
 ```http
 GET /vehicles/stats
 Authorization: Bearer <access_token>
 ```
 
-#### 11. Nutzungen abrufen
+#### 12. Nutzungen abrufen
 ```http
 GET /usages
 Authorization: Bearer <access_token>
 ```
 
-#### 12. Nutzung erstellen
+#### 13. Nutzung erstellen
 ```http
 POST /usages
 Authorization: Bearer <access_token>
