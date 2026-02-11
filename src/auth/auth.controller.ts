@@ -85,11 +85,10 @@ export class AuthController {
    */
   @Post('update-password')
   updatePassword(
-    @Headers('authorization') auth: string,
+    @CurrentUser() user: AuthUser,
     @Body() dto: UpdatePasswordDto,
   ) {
-    const token = auth?.substring(7);
-    return this.authService.updatePassword(token, dto.new_password);
+    return this.authService.updatePassword(user.id, dto.new_password);
   }
 
   /**
