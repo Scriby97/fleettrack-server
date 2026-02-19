@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, ForbiddenException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ForbiddenException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { SupabaseService } from '../supabase/supabase.service';
@@ -7,6 +7,7 @@ import { UserRole } from './enums/user-role.enum';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
   constructor(
     private supabaseService: SupabaseService,
     @InjectRepository(UserProfileEntity)
@@ -253,6 +254,7 @@ export class AuthService {
     });
 
     if (error) {
+      this.logger.error(`Supabase admin update failed: ${JSON.stringify(error)}`);
       throw new UnauthorizedException(this.translateSupabaseError(error.message));
     }
 

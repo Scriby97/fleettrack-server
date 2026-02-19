@@ -7,8 +7,8 @@ export class SupabaseService {
   private adminSupabase?: SupabaseClient;
 
   constructor() {
-    const supabaseUrl = process.env.SUPABASE_URL || '';
-    const supabaseKey = process.env.SUPABASE_ANON_KEY || '';
+    const supabaseUrl = (process.env.SUPABASE_URL || '').trim();
+    const supabaseKey = (process.env.SUPABASE_ANON_KEY || '').trim();
 
     if (!supabaseUrl || !supabaseKey) {
       throw new Error(
@@ -31,8 +31,8 @@ export class SupabaseService {
       return this.adminSupabase;
     }
 
-    const supabaseUrl = process.env.SUPABASE_URL || '';
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+    const supabaseUrl = (process.env.SUPABASE_URL || '').trim();
+    const serviceRoleKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
 
     if (!supabaseUrl || !serviceRoleKey) {
       throw new Error(
@@ -49,8 +49,8 @@ export class SupabaseService {
    * für authentifizierte Anfragen
    */
   getAuthenticatedClient(accessToken: string): SupabaseClient {
-    const supabaseUrl = process.env.SUPABASE_URL || '';
-    const supabaseKey = process.env.SUPABASE_ANON_KEY || '';
+    const supabaseUrl = (process.env.SUPABASE_URL || '').trim();
+    const supabaseKey = (process.env.SUPABASE_ANON_KEY || '').trim();
 
     return createClient(supabaseUrl, supabaseKey, {
       global: {
