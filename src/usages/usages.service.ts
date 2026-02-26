@@ -37,6 +37,7 @@ export class UsagesService {
     const queryBuilder = this.repo
       .createQueryBuilder('usage')
       .innerJoinAndSelect('usage.vehicle', 'vehicle')
+      .innerJoinAndSelect('usage.creator', 'creator')
       .orderBy('usage.creationDate', 'DESC');
 
     if (organizationId) {
@@ -54,6 +55,7 @@ export class UsagesService {
     return usages.map(usage => ({
       id: usage.id,
       vehicleId: usage.vehicleId,
+      creatorId: usage.creatorId,
       startOperatingHours: usage.startOperatingHours,
       endOperatingHours: usage.endOperatingHours,
       fuelLitersRefilled: usage.fuelLitersRefilled,
@@ -63,6 +65,11 @@ export class UsagesService {
         id: usage.vehicle.id,
         name: usage.vehicle.name,
         plate: usage.vehicle.plate,
+      },
+      creator: {
+        id: usage.creator.id,
+        firstName: usage.creator.firstName,
+        lastName: usage.creator.lastName,
       },
     }));
   }

@@ -1,10 +1,27 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 @Injectable()
 export class SupabaseService {
   private supabase: SupabaseClient;
   private adminSupabase?: SupabaseClient;
+  private readonly logger = new Logger(SupabaseService.name);
+
+  private parseJwtPayload(token: string): Record<string, unknown> | null {
+    const parts = token.split('.');
+    if (parts.length < 2) {
+      return null;
+    }
+
+    try {
+      const payload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      const padded = payload.padEnd(payload.length + (4 - (payload.length % 4)) % 4, '=');
+      const decoded = Buffer.from(padded, 'base64').toString('utf8');
+      return JSON.parse(decoded) as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  }
 
   constructor() {
     const supabaseUrl = (process.env.SUPABASE_URL || '').trim();
@@ -38,6 +55,16 @@ export class SupabaseService {
       throw new Error(
         'SUPABASE_URL und SUPABASE_SERVICE_ROLE_KEY muessen in .env gesetzt werden',
       );
+    }
+
+    const payload = this.parseJwtPayload(serviceRoleKey);
+    if (payload) {
+      const role = String(payload.role || 'unknown');
+      const issuer = String(payload.iss || 'unknown');
+      this.logger.debug(`Service role key payload role: ${role}`);
+      this.logger.debug(`Service role key issuer: ${issuer}`);
+    } else {
+      this.logger.warn('Service role key konnte nicht als JWT gelesen werden');
     }
 
     this.adminSupabase = createClient(supabaseUrl, serviceRoleKey);
