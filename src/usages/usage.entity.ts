@@ -44,14 +44,15 @@ export class UsageEntity {
   usageDate: Date;
 
   @Column({ type: 'bigint', default: () => '(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000)::bigint' })
+  @Column({ name: 'updatedat', type: 'bigint', default: () => '(EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000)::bigint' })
   updatedAt: number;
 
-  @Column({ type: 'integer', default: 1 })
+  @Column({ name: 'version', type: 'integer', default: 1 })
   version: number;
 
-  @Column({ type: 'boolean', default: false })
+  @Column({ name: 'deleted', type: 'boolean', default: false })
   deleted: boolean;
 
-  @Column({ type: 'bigint', nullable: true })
+  @Column({ name: 'deletedat', type: 'bigint', nullable: true })
   deletedAt?: number;
 }

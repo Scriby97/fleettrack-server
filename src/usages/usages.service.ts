@@ -42,7 +42,7 @@ export class UsagesService {
       .createQueryBuilder('usage')
       .innerJoinAndSelect('usage.vehicle', 'vehicle')
       .innerJoinAndSelect('usage.creator', 'creator')
-      .orderBy('usage.creationDate', 'DESC');
+      .orderBy('usage."creationDate"', 'DESC');
 
     if (organizationId) {
       queryBuilder.where('vehicle.organizationId = :organizationId', { organizationId });
@@ -167,7 +167,8 @@ export class UsagesService {
   async findChangesSince(sinceMs: number): Promise<UsageEntity[]> {
     return this.repo
       .createQueryBuilder('usage')
-      .where('usage.updatedAt > :since OR usage.creationDate > :since', { since: sinceMs })
+      // use lowercase column names for updatedat (migration added unquoted lowercase name)
+      .where('usage.updatedat > :since OR usage."creationDate" > :since', { since: sinceMs })
       .getMany();
   }
 }
