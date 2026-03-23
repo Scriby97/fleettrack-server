@@ -5,14 +5,12 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { VehicleEntity } from './vehicles/vehicle.entity';
 import { UsageEntity } from './usages/usage.entity';
-import { IdempotencyKeyEntity } from './idempotency/idempotency.entity';
 import { UserProfileEntity } from './auth/entities/user-profile.entity';
 import { OrganizationEntity } from './organizations/organization.entity';
 import { OrganizationInviteEntity } from './organizations/entities/organization-invite.entity';
 import { UsagesService } from './usages/usages.service';
 import { VehiclesController } from './vehicles/vehicles.controller';
 import { UsagesController } from './usages/usages.controller';
-import { SyncController } from './sync/sync.controller';
 import { VehiclesService } from './vehicles/vehicles.service';
 import { SupabaseModule } from './supabase/supabase.module';
 import { AuthModule } from './auth/auth.module';
@@ -27,7 +25,7 @@ import { OrganizationsModule } from './organizations/organizations.module';
     TypeOrmModule.forRoot({
       type: 'postgres',
       url: process.env.DATABASE_URL,
-      entities: [VehicleEntity, UsageEntity, UserProfileEntity, OrganizationEntity, OrganizationInviteEntity, IdempotencyKeyEntity],
+      entities: [VehicleEntity, UsageEntity, UserProfileEntity, OrganizationEntity, OrganizationInviteEntity],
       synchronize: false, // Temporär deaktiviert - wir machen Migrations manuell
       ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
       extra: {
@@ -38,15 +36,14 @@ import { OrganizationsModule } from './organizations/organizations.module';
         } : false,
       },
     }),
-     TypeOrmModule.forFeature([VehicleEntity, UsageEntity, IdempotencyKeyEntity]),
+     TypeOrmModule.forFeature([VehicleEntity, UsageEntity]),
      SupabaseModule,
      AuthModule,
      OrganizationsModule,
   ],
   controllers: [AppController,
     VehiclesController,
-    UsagesController,
-    SyncController
+    UsagesController
   ],
   providers: [AppService,
     VehiclesService,

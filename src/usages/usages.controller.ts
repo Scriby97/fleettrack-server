@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Headers, HttpCode, HttpException } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param } from '@nestjs/common';
 import { UsagesService } from './usages.service';
 import { CreateUsageDto } from './dto/create-usage.dto';
 import { UpdateUsageDto } from './dto/update-usage.dto';
@@ -65,11 +65,7 @@ export class UsagesController {
    * Neue Nutzung erstellen (benötigt Auth)
    */
   @Post()
-  create(
-    @Body() dto: CreateUsageDto,
-    @CurrentUser() user: AuthUser,
-    @Headers('idempotency-key') idempotencyKey?: string,
-  ) {
+  create(@Body() dto: CreateUsageDto, @CurrentUser() user: AuthUser) {
     // transform DTO to a Partial<UsageEntity> and pass to service
     const partial: Partial<UsageEntity> = {
       vehicleId: dto.vehicleId,
@@ -80,7 +76,7 @@ export class UsagesController {
       usageDate: dto.usageDate,
       creatorId: user.id,
     };
-    return this.usagesService.create(partial, idempotencyKey, user.id);
+    return this.usagesService.create(partial);
   }
 
   /**
@@ -92,26 +88,11 @@ export class UsagesController {
     @Param('id') id: string,
     @Body() dto: UpdateUsageDto,
     @CurrentUser() user: AuthUser,
-    @Headers('if-match') ifMatch?: string,
   ) {
     const partial: Partial<UsageEntity> = {
       ...dto,
     };
-    // Parse If-Match header if present (accepts numeric version)
-    let expectedVersion: number | undefined;
-    if (ifMatch) {
-      const maybe = Number(ifMatch.replace(/"/g, ''));
-      if (!Number.isNaN(maybe)) expectedVersion = maybe;
-    }
-    try {
-      return this.usagesService.update(id, partial, expectedVersion);
-    } catch (err) {
-      // Pass ConflictException through with body
-      if (err && err.status === 409) {
-        throw new HttpException(err.response, 409);
-      }
-      throw err;
-    }
+    return this.usagesService.update(id, partial);
   }
 
   /**

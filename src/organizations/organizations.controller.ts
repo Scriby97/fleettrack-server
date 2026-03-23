@@ -121,33 +121,6 @@ export class OrganizationsController {
   }
 
   /**
-   * DELETE /organizations/invites/expired
-   * Löscht alle abgelaufenen Invites der eigenen Organisation
-   * SUPER_ADMINs können mit ?organizationId=xxx abgelaufene Invites beliebiger Orgs löschen
-   */
-  @Delete('invites/expired')
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
-  deleteExpiredInvites(
-    @CurrentUser() user: AuthUser,
-    @CurrentOrganization() userOrgId?: string,
-    @Query('organizationId') queryOrgId?: string,
-  ) {
-    // SUPER_ADMIN kann optional organizationId per Query Parameter angeben
-    let targetOrgId: string;
-    if (user.role === UserRole.SUPER_ADMIN && queryOrgId) {
-      targetOrgId = queryOrgId;
-    } else {
-      // Normale Admins verwenden ihre eigene Organization
-      if (!userOrgId) {
-        throw new Error('You must belong to an organization to delete expired invites');
-      }
-      targetOrgId = userOrgId;
-    }
-
-    return this.invitesService.deleteExpiredInvites(targetOrgId);
-  }
-
-  /**
    * DELETE /organizations/invites/:inviteId
    * Löscht einen Invite
    */
