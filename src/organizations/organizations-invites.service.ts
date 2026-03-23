@@ -158,6 +158,26 @@ export class OrganizationsInvitesService {
   }
 
   /**
+   * Löscht alle abgelaufenen Invites einer Organisation
+   */
+  async deleteExpiredInvites(organizationId: string): Promise<{ deleted: number }> {
+    const now = new Date();
+    
+    const expiredInvites = await this.inviteRepository.find({
+      where: { organizationId },
+    });
+
+    // Filtere nur abgelaufene Invites
+    const toDelete = expiredInvites.filter(invite => invite.expiresAt < now);
+
+    if (toDelete.length > 0) {
+      await this.inviteRepository.remove(toDelete);
+    }
+
+    return { deleted: toDelete.length };
+  }
+
+  /**
    * Generiert einen sicheren, einzigartigen Token
    */
   private generateInviteToken(): string {
