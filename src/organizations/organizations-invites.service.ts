@@ -3,6 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
   ConflictException,
+  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -14,6 +15,8 @@ import { randomBytes } from 'crypto';
 
 @Injectable()
 export class OrganizationsInvitesService {
+  private readonly logger = new Logger(OrganizationsInvitesService.name);
+
   constructor(
     @InjectRepository(OrganizationInviteEntity)
     private readonly inviteRepository: Repository<OrganizationInviteEntity>,
@@ -29,6 +32,10 @@ export class OrganizationsInvitesService {
     createInviteDto: CreateInviteDto,
     invitedBy?: string,
   ): Promise<OrganizationInviteEntity> {
+    this.logger.log(
+      `createInvite start organizationId=${organizationId} email=${createInviteDto.email} invitedBy=${invitedBy || 'none'}`,
+    );
+
     // Prüfe ob Organisation existiert
     const organization = await this.organizationRepository.findOne({
       where: { id: organizationId },
@@ -73,7 +80,17 @@ export class OrganizationsInvitesService {
       expiresAt,
     });
 
-    return await this.inviteRepository.save(invite);
+    this.logger.log(
+      `createInvite prepared invite organizationId=${invite.organizationId} tokenPrefix=${invite.token.substring(0, 10)}`,
+    );
+
+    const savedInvite = await this.inviteRepository.save(invite);
+
+    this.logger.log(
+      `createInvite saved inviteId=${savedInvite.id} organizationId=${savedInvite.organizationId} tokenPrefix=${savedInvite.token.substring(0, 10)}`,
+    );
+
+    return savedInvite;
   }
 
   /**
@@ -138,6 +155,16 @@ export class OrganizationsInvitesService {
   ): Promise<OrganizationInviteEntity[]> {
     return await this.inviteRepository.find({
       where: { organizationId },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  /**
+   * Holt alle Invites über alle Organisationen
+   */
+  async getAllInvites(): Promise<OrganizationInviteEntity[]> {
+    return await this.inviteRepository.find({
+      relations: ['organization'],
       order: { createdAt: 'DESC' },
     });
   }

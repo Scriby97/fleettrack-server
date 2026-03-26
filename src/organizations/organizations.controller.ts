@@ -8,7 +8,10 @@ import {
   Delete,
   UseGuards,
   Query,
+  Logger,
+  Req,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import { OrganizationsService } from './organizations.service';
 import { OrganizationsInvitesService } from './organizations-invites.service';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
@@ -25,6 +28,8 @@ import { CurrentOrganization } from '../auth/decorators/current-organization.dec
 @Controller('organizations')
 @UseGuards(SupabaseAuthGuard, RolesGuard)
 export class OrganizationsController {
+  private readonly logger = new Logger(OrganizationsController.name);
+
   constructor(
     private readonly organizationsService: OrganizationsService,
     private readonly invitesService: OrganizationsInvitesService,
@@ -64,20 +69,33 @@ export class OrganizationsController {
   /**
    * POST /organizations/invites
    * Erstellt einen Invite-Link für die eigene Organization
-   * Admins können nur für ihre eigene Org inviten, SUPER_ADMINs für beliebige Orgs (mit ?organizationId=xxx)
+    * Admins können nur für ihre eigene Org inviten, SUPER_ADMINs für beliebige Orgs
+    * (mit ?organizationId=xxx oder organizationId im Body)
    */
   @Post('invites')
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
   createInvite(
+    @Req() req: Request,
     @Body() createInviteDto: CreateInviteDto,
     @CurrentUser() user: AuthUser,
     @CurrentOrganization() userOrgId?: string,
     @Query('organizationId') queryOrgId?: string,
   ) {
-    // SUPER_ADMIN kann optional organizationId per Query Parameter angeben
+    this.logger.log(
+      `createInvite raw frontend params query=${JSON.stringify(req.query)} body=${JSON.stringify(req.body)}`,
+    );
+    this.logger.log(
+      `createInvite validated dto email=${createInviteDto.email} role=${createInviteDto.role || 'none'} organizationId=${createInviteDto.organizationId || 'none'}`,
+    );
+    this.logger.log(
+      `createInvite called by user=${user.id} role=${user.role} queryOrgId=${queryOrgId || 'none'} bodyOrgId=${createInviteDto.organizationId || 'none'} userOrgId=${userOrgId || 'none'}`,
+    );
+
+    // SUPER_ADMIN kann organizationId per Query oder Body angeben
     let targetOrgId: string;
-    if (user.role === UserRole.SUPER_ADMIN && queryOrgId) {
-      targetOrgId = queryOrgId;
+    const superAdminTargetOrgId = queryOrgId || createInviteDto.organizationId;
+    if (user.role === UserRole.SUPER_ADMIN && superAdminTargetOrgId) {
+      targetOrgId = superAdminTargetOrgId;
     } else {
       // Normale Admins verwenden ihre eigene Organization
       if (!userOrgId) {
@@ -85,6 +103,10 @@ export class OrganizationsController {
       }
       targetOrgId = userOrgId;
     }
+
+    this.logger.log(
+      `createInvite resolved targetOrgId=${targetOrgId} email=${createInviteDto.email}`,
+    );
 
     return this.invitesService.createInvite(
       targetOrgId,
@@ -96,7 +118,7 @@ export class OrganizationsController {
   /**
    * GET /organizations/invites
    * Holt alle Invites der eigenen Organisation
-   * SUPER_ADMINs können mit ?organizationId=xxx Invites beliebiger Orgs abrufen
+    * SUPER_ADMINs erhalten standardmäßig alle Invites oder mit ?organizationId=xxx nur eine Org
    */
   @Get('invites')
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
@@ -105,19 +127,21 @@ export class OrganizationsController {
     @CurrentOrganization() userOrgId?: string,
     @Query('organizationId') queryOrgId?: string,
   ) {
-    // SUPER_ADMIN kann optional organizationId per Query Parameter angeben
-    let targetOrgId: string;
-    if (user.role === UserRole.SUPER_ADMIN && queryOrgId) {
-      targetOrgId = queryOrgId;
-    } else {
-      // Normale Admins verwenden ihre eigene Organization
-      if (!userOrgId) {
-        throw new Error('You must belong to an organization to view invites');
+    // SUPER_ADMIN: ohne Filter alle Invites, mit Filter nur eine Org
+    if (user.role === UserRole.SUPER_ADMIN) {
+      if (queryOrgId) {
+        return this.invitesService.getInvitesByOrganization(queryOrgId);
       }
-      targetOrgId = userOrgId;
+
+      return this.invitesService.getAllInvites();
     }
 
-    return this.invitesService.getInvitesByOrganization(targetOrgId);
+    // Normale Admins verwenden ihre eigene Organization
+    if (!userOrgId) {
+      throw new Error('You must belong to an organization to view invites');
+    }
+
+    return this.invitesService.getInvitesByOrganization(userOrgId);
   }
 
   /**
