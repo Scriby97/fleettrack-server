@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Delete, Param, Put } from '@nestjs/common';
+import { Controller, Get, Post, Body, Delete, Param, Put, Query } from '@nestjs/common';
 import { VehiclesService } from './vehicles.service';
 import { CreateVehicleDto } from './dto/create-vehicle.dto';
 import { UpdateVehicleDto } from './dto/update-vehicle.dto';
@@ -15,28 +15,36 @@ export class VehiclesController {
   /**
    * GET /vehicles
    * Alle Fahrzeuge abrufen (benötigt Auth)
-   * Super-Admins sehen alle, andere nur ihre Organisation
+   * Super-Admins sehen alle oder können mit ?organizationId=... filtern
+   * Andere Rollen sehen nur ihre Organisation
    */
   @Get()
   getAll(
     @CurrentUser() user: AuthUser,
     @CurrentOrganization() organizationId?: string,
+    @Query('organizationId') queryOrgId?: string,
   ) {
-    // Super-Admins sehen alle Fahrzeuge, andere nur ihre Organisation
-    const filterOrgId = user.role === UserRole.SUPER_ADMIN ? undefined : organizationId;
+    const filterOrgId = user.role === UserRole.SUPER_ADMIN ? (queryOrgId || undefined) : organizationId;
     return this.vehiclesService.findAll(filterOrgId);
   }
 
   /**
    * GET /vehicles/stats
    * Fahrzeug-Statistiken abrufen (benötigt Auth)
+   * Super-Admins können optional ?organizationId=... übergeben, um eine bestimmte Organisation zu filtern
    */
   @Get('stats')
   getStats(
     @CurrentUser() user: AuthUser,
     @CurrentOrganization() organizationId?: string,
+    @Query('organizationId') queryOrgId?: string,
   ) {
-    const filterOrgId = user.role === UserRole.SUPER_ADMIN ? undefined : organizationId;
+    let filterOrgId: string | undefined;
+    if (user.role === UserRole.SUPER_ADMIN) {
+      filterOrgId = queryOrgId || undefined; // Super-Admin kann optional filtern
+    } else {
+      filterOrgId = organizationId; // Normale Admins sehen nur ihre Organisation
+    }
     return this.vehiclesService.stats(filterOrgId);
   }
 

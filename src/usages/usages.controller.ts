@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query } from '@nestjs/common';
 import { UsagesService } from './usages.service';
 import { CreateUsageDto } from './dto/create-usage.dto';
 import { UpdateUsageDto } from './dto/update-usage.dto';
@@ -15,7 +15,7 @@ export class UsagesController {
   /**
    * GET /usages/with-vehicles
    * Alle Nutzungen mit Fahrzeug-Daten abrufen (benötigt Auth)
-   * Super-Admins sehen alle Usages (oder gefiltert nach ausgewählter Org)
+   * Super-Admins sehen alle Usages oder können mit ?organizationId=... filtern
    * Admins sehen alle Usages ihrer Organisation
    * Normale Users sehen nur ihre eigenen Usages
    */
@@ -23,13 +23,14 @@ export class UsagesController {
   async getAllWithVehicles(
     @CurrentUser() user: AuthUser,
     @CurrentOrganization() organizationId?: string,
+    @Query('organizationId') queryOrgId?: string,
   ) {
     let filterOrgId: string | undefined;
     let filterCreatorId: string | undefined;
 
     if (user.role === UserRole.SUPER_ADMIN) {
-      // Super-Admins können alle sehen oder eine bestimmte Org auswählen (über organizationId)
-      filterOrgId = organizationId; // undefined wenn keine Org ausgewählt
+      // Super-Admins können optional nach einer bestimmten Org filtern
+      filterOrgId = queryOrgId || undefined;
     } else if (user.role === UserRole.ADMIN) {
       // Admins sehen alle Usages ihrer Organisation
       filterOrgId = organizationId;
@@ -46,17 +47,21 @@ export class UsagesController {
   /**
    * GET /usages
    * Alle Nutzungen abrufen (benötigt Auth)
-   * Super-Admins sehen alle Usages (oder gefiltert nach ausgewählter Org)
+   * Super-Admins sehen alle Usages oder können mit ?organizationId=... filtern
    * Admins/Users sehen nur Usages ihrer Organisation
    */
   @Get()
   getAll(
     @CurrentUser() user: AuthUser,
     @CurrentOrganization() organizationId?: string,
+    @Query('organizationId') queryOrgId?: string,
   ) {
-    // Super-Admins können alle sehen oder eine bestimmte Org auswählen
-    // Andere Rollen sehen nur ihre eigene Organisation
-    const filterOrgId = user.role === UserRole.SUPER_ADMIN ? undefined : organizationId;
+    let filterOrgId: string | undefined;
+    if (user.role === UserRole.SUPER_ADMIN) {
+      filterOrgId = queryOrgId || undefined; // Super-Admin kann optional nach Org filtern
+    } else {
+      filterOrgId = organizationId; // Andere Rollen sehen nur ihre eigene Organisation
+    }
     return this.usagesService.findAll(filterOrgId);
   }
 
