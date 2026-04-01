@@ -18,9 +18,14 @@ export interface VehicleStats {
   name: string;
   plate: string;
   snowsatNumber: string;
+  isRetired: boolean;
+  location?: string;
+  vehicleType?: string;
+  fuelType?: string;
+  notes?: string;
+  organizationId: string;
   totalWorkHours: number; // hours
   totalFuelLiters: number;
-  isRetired: boolean;
 }
 
 @Injectable()
@@ -67,10 +72,15 @@ export class VehiclesService {
           'v.plate as plate',
           'v.snowsatNumber as "snowsatNumber"',
           'v.isRetired as "isRetired"',
+          'v.location as location',
+          'v.vehicleType as "vehicleType"',
+          'v.fuelType as "fuelType"',
+          'v.notes as notes',
+          'v.organizationId as "organizationId"',
           'COALESCE(SUM(u.endOperatingHours - u.startOperatingHours), 0) as "totalWorkHours"',
           'COALESCE(SUM(u.fuelLitersRefilled), 0) as "totalFuelLiters"',
         ])
-        .groupBy('v.id, v.name, v.plate, v.snowsatNumber, v.isRetired');
+        .groupBy('v.id, v.name, v.plate, v.snowsatNumber, v.isRetired, v.location, v.vehicleType, v.fuelType, v.notes, v.organizationId');
 
       // Filter by organization if provided
       if (organizationId) {
@@ -97,6 +107,11 @@ export class VehiclesService {
         plate: r.plate,
         snowsatNumber: r.snowsatNumber,
         isRetired: r.isRetired || false,
+        location: r.location ?? null,
+        vehicleType: r.vehicleType ?? null,
+        fuelType: r.fuelType ?? null,
+        notes: r.notes ?? null,
+        organizationId: r.organizationId,
         totalWorkHours: Number(r.totalWorkHours) || 0,
         totalFuelLiters: Number(r.totalFuelLiters) || 0,
       }));
