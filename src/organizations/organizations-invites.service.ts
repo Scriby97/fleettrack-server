@@ -129,16 +129,16 @@ export class OrganizationsInvitesService {
     token: string,
     userId: string,
   ): Promise<OrganizationInviteEntity> {
-    this.logger.debug(`markInviteAsUsed called with token=${token.substring(0, 20)}... userId=${userId}`);
+    this.logger.debug(`markInviteAsUsed called with token=${token.substring(0, 20)}...`);
 
     const invite = await this.validateInvite(token);
-    this.logger.debug(`Invite before update: id=${invite.id}, usedAt=${invite.usedAt}, usedBy=${invite.usedBy}`);
+    this.logger.debug(`Invite before update: id=${invite.id}`);
 
     invite.usedAt = new Date();
     invite.usedBy = userId;
 
     const saved = await this.inviteRepository.save(invite);
-    this.logger.debug(`Invite after save: id=${saved.id}, usedAt=${saved.usedAt}, usedBy=${saved.usedBy}`);
+    this.logger.debug(`Invite after save: id=${saved.id}, usedAt=${saved.usedAt}`);
 
     return saved;
   }

@@ -50,7 +50,7 @@ export class InvitesController {
   @Public()
   @Post('accept')
   async acceptInvite(@Body() acceptInviteDto: AcceptInviteDto) {
-    this.logger.log(`POST /invites/accept token=${acceptInviteDto.token.substring(0, 20)}... email=${acceptInviteDto.email}`);
+    this.logger.log(`POST /invites/accept token=${acceptInviteDto.token.substring(0, 20)}...`);
 
     // Validiere Invite
     const invite = await this.invitesService.validateInvite(
