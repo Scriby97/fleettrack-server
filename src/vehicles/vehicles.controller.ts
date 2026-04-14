@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Delete, Param, Put, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Delete, Param, Put, Query, BadRequestException } from '@nestjs/common';
 import { VehiclesService } from './vehicles.service';
 import { CreateVehicleDto } from './dto/create-vehicle.dto';
 import { UpdateVehicleDto } from './dto/update-vehicle.dto';
@@ -75,7 +75,7 @@ export class VehiclesController {
     // Verwende die Organization des Users, außer Super-Admin gibt explizit eine an
     const orgId = dto.organizationId || organizationId;
     if (!orgId) {
-      throw new Error('Organization ID is required');
+      throw new BadRequestException('Organization ID is required');
     }
     return this.vehiclesService.create({ ...dto, organizationId: orgId });
   }

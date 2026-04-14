@@ -216,12 +216,10 @@ export class AuthService {
       throw new UnauthorizedException('User nicht gefunden');
     }
 
-    if (
-      requesterRole === UserRole.ADMIN &&
-      requesterOrganizationId &&
-      targetProfile.organizationId !== requesterOrganizationId
-    ) {
-      throw new ForbiddenException('Kein Zugriff auf User außerhalb der Organization');
+    if (requesterRole === UserRole.ADMIN) {
+      if (!requesterOrganizationId || targetProfile.organizationId !== requesterOrganizationId) {
+        throw new ForbiddenException('Kein Zugriff auf User außerhalb der Organization');
+      }
     }
 
     const supabase = this.supabaseService.getClient();

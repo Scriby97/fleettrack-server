@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { VehicleEntity } from './vehicle.entity';
@@ -30,6 +30,8 @@ export interface VehicleStats {
 
 @Injectable()
 export class VehiclesService {
+  private readonly logger = new Logger(VehiclesService.name);
+
   constructor(
     @InjectRepository(VehicleEntity)
     private readonly repo: Repository<VehicleEntity>,
@@ -90,10 +92,8 @@ export class VehiclesService {
       // Log the generated SQL and parameters to help debugging
       try {
         const [query, params] = qb.getQueryAndParameters();
-        // eslint-disable-next-line no-console
-        console.log('Vehicle stats SQL:', query);
-        // eslint-disable-next-line no-console
-        console.log('Vehicle stats params:', params);
+        this.logger.debug(`Vehicle stats SQL: ${query}`);
+        this.logger.debug(`Vehicle stats params: ${JSON.stringify(params)}`);
       } catch (e) {
         // ignore if query introspection isn't available
       }
@@ -117,8 +117,7 @@ export class VehiclesService {
       }));
     } catch (err) {
       // Log and rethrow a clear error for easier debugging
-      // eslint-disable-next-line no-console
-      console.error('Error fetching vehicle stats:', err);
+      this.logger.error('Error fetching vehicle stats:', err);
       throw err;
     }
   }
@@ -206,14 +205,3 @@ export class VehiclesService {
     }
   }
 }
-
-  // getHello(): Vehicle[] {
-  //   return [
-  //     { id: '1', name: 'Pistenbully 600', plate: 'BE 245 834' },
-  //     { id: '2', name: 'Ratrak 600', plate: 'BE 512 091' },
-  //     { id: '3', name: 'PistenBully 400 W', plate: 'BE 687 445' },
-  //     { id: '4', name: 'Snowcat ST4', plate: 'BE 834 567' },
-  //     { id: '5', name: 'Hägglunds BV206', plate: 'BE 923 156' },
-  //     { id: '6', name: 'Loon ST5', plate: 'BE 178 203' },
-  //   ];
-  // }
