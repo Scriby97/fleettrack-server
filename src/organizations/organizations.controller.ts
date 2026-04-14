@@ -10,6 +10,8 @@ import {
   Query,
   Logger,
   Req,
+  BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { OrganizationsService } from './organizations.service';
@@ -99,7 +101,7 @@ export class OrganizationsController {
     } else {
       // Normale Admins verwenden ihre eigene Organization
       if (!userOrgId) {
-        throw new Error('You must belong to an organization to create invites');
+        throw new BadRequestException('You must belong to an organization to create invites');
       }
       targetOrgId = userOrgId;
     }
@@ -138,7 +140,7 @@ export class OrganizationsController {
 
     // Normale Admins verwenden ihre eigene Organization
     if (!userOrgId) {
-      throw new Error('You must belong to an organization to view invites');
+      throw new BadRequestException('You must belong to an organization to view invites');
     }
 
     return this.invitesService.getInvitesByOrganization(userOrgId);
@@ -150,8 +152,12 @@ export class OrganizationsController {
    */
   @Delete('invites/:inviteId')
   @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
-  deleteInvite(@Param('inviteId') inviteId: string) {
-    return this.invitesService.deleteInvite(inviteId);
+  deleteInvite(
+    @Param('inviteId') inviteId: string,
+    @CurrentUser() user: AuthUser,
+    @CurrentOrganization() userOrgId?: string,
+  ) {
+    return this.invitesService.deleteInvite(inviteId, user.role, userOrgId);
   }
 
   // ============================================
@@ -160,7 +166,14 @@ export class OrganizationsController {
 
   @Get(':id')
   @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
-  findOne(@Param('id') id: string) {
+  findOne(
+    @Param('id') id: string,
+    @CurrentUser() user: AuthUser,
+    @CurrentOrganization() userOrgId?: string,
+  ) {
+    if (user.role !== UserRole.SUPER_ADMIN && id !== userOrgId) {
+      throw new ForbiddenException('You can only view your own organization');
+    }
     return this.organizationsService.findOne(id);
   }
 

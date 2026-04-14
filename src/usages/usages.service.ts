@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DeepPartial } from 'typeorm';
 import { UsageEntity } from './usage.entity';
@@ -91,7 +91,7 @@ export class UsagesService {
     await this.repo.update(id, data);
     const updated = await this.repo.findOne({ where: { id } });
     if (!updated) {
-      throw new Error(`Usage with id ${id} not found`);
+      throw new NotFoundException(`Usage with id ${id} not found`);
     }
     return updated;
   }

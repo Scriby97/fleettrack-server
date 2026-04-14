@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsNumber, Min, IsDate, IsPositive, Matches } from 'class-validator';
+import { IsString, IsOptional, IsNumber, Min, IsDate } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreateUsageDto {
@@ -12,7 +12,7 @@ export class CreateUsageDto {
 
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 1 })
-  @IsPositive()
+  @Min(0)
   @IsOptional()
   endOperatingHours?: number;
 

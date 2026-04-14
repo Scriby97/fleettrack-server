@@ -50,26 +50,24 @@ export class InvitesController {
   @Public()
   @Post('accept')
   async acceptInvite(@Body() acceptInviteDto: AcceptInviteDto) {
-    this.logger.log('🎯 POST /invites/accept wurde aufgerufen!');
-    this.logger.log(`Token: ${acceptInviteDto.token.substring(0, 20)}...`);
-    this.logger.log(`Email: ${acceptInviteDto.email}`);
+    this.logger.log(`POST /invites/accept token=${acceptInviteDto.token.substring(0, 20)}...`);
 
     // Validiere Invite
     const invite = await this.invitesService.validateInvite(
       acceptInviteDto.token,
     );
-    this.logger.log(`✅ Invite validiert für Organization: ${invite.organization.name}`);
+    this.logger.log(`Invite validated for organization: ${invite.organization.name}`);
 
     // Prüfe ob die Email übereinstimmt
     if (invite.email.toLowerCase() !== acceptInviteDto.email.toLowerCase()) {
-      this.logger.error(`❌ Email mismatch: Invite=${invite.email}, Request=${acceptInviteDto.email}`);
+      this.logger.warn(`Email mismatch: Invite=${invite.email}, Request=${acceptInviteDto.email}`);
       throw new BadRequestException(
         'Email does not match the invited email address',
       );
     }
 
     // Erstelle User mit der richtigen Organization
-    this.logger.log(`🔨 Erstelle User mit authService.signUp()...`);
+    this.logger.log(`Creating user via authService.signUp()...`);
     const result = await this.authService.signUp(
       acceptInviteDto.email,
       acceptInviteDto.password,
@@ -80,18 +78,17 @@ export class InvitesController {
       invite.role as any,
       invite.organizationId,
     );
-    this.logger.log(`✅ User erstellt: ${result.user?.id}`);
+    this.logger.log(`User created: ${result.user?.id}`);
 
     // Markiere Invite als verwendet
     if (result.user) {
-      this.logger.log(`📝 Markiere Invite als verwendet...`);
       await this.invitesService.markInviteAsUsed(
         acceptInviteDto.token,
         result.user.id,
       );
-      this.logger.log(`✅ Invite markiert als verwendet!`);
+      this.logger.log(`Invite marked as used`);
     } else {
-      this.logger.error(`❌ result.user ist null/undefined - Invite wird NICHT markiert!`);
+      this.logger.error(`result.user is null/undefined - invite will NOT be marked as used`);
     }
 
     return {

@@ -3,6 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -128,21 +129,16 @@ export class OrganizationsInvitesService {
     token: string,
     userId: string,
   ): Promise<OrganizationInviteEntity> {
-    console.log('🔍 markInviteAsUsed aufgerufen mit:', { token: token.substring(0, 20), userId });
-    
+    this.logger.debug(`markInviteAsUsed called with token=${token.substring(0, 20)}...`);
+
     const invite = await this.validateInvite(token);
-    console.log('📋 Invite vor Update:', { id: invite.id, usedAt: invite.usedAt, usedBy: invite.usedBy });
+    this.logger.debug(`Invite before update: id=${invite.id}`);
 
     invite.usedAt = new Date();
     invite.usedBy = userId;
-    console.log('📝 Invite nach Änderung (vor save):', { id: invite.id, usedAt: invite.usedAt, usedBy: invite.usedBy });
 
     const saved = await this.inviteRepository.save(invite);
-    console.log('💾 Invite nach save:', { id: saved.id, usedAt: saved.usedAt, usedBy: saved.usedBy });
-    
-    // Verify by re-querying
-    const verified = await this.inviteRepository.findOne({ where: { id: invite.id } });
-    console.log('✅ Invite nach DB-Query:', verified ? { id: verified.id, usedAt: verified.usedAt, usedBy: verified.usedBy } : 'NOT FOUND IN DB!');
+    this.logger.debug(`Invite after save: id=${saved.id}, usedAt=${saved.usedAt}`);
 
     return saved;
   }
@@ -171,14 +167,19 @@ export class OrganizationsInvitesService {
 
   /**
    * Löscht einen Invite
+   * Regular admins can only delete invites from their own organization
    */
-  async deleteInvite(inviteId: string): Promise<void> {
+  async deleteInvite(inviteId: string, userRole?: string, organizationId?: string): Promise<void> {
     const invite = await this.inviteRepository.findOne({
       where: { id: inviteId },
     });
 
     if (!invite) {
       throw new NotFoundException('Invite not found');
+    }
+
+    if (userRole !== UserRole.SUPER_ADMIN && invite.organizationId !== organizationId) {
+      throw new ForbiddenException('You can only delete invites from your organization');
     }
 
     await this.inviteRepository.remove(invite);
