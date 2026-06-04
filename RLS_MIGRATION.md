@@ -7,7 +7,7 @@ Supabase Security Advisor zeigt 3 Errors:
 3. ⚠️ Sensitive Columns Exposed - `public.organization_invites`
 
 ## Lösung
-Migration `009_enable_rls_policies.sql` aktiviert RLS auf allen Tabellen und erstellt sichere Policies.
+Migration `001_initial_schema.sql` setzt das vollständige Baseline-Schema inkl. RLS und Policies.
 
 ## Migration ausführen
 
@@ -16,7 +16,7 @@ Migration `009_enable_rls_policies.sql` aktiviert RLS auf allen Tabellen und ers
 1. Gehe zu deinem Supabase-Projekt: https://supabase.com/dashboard
 2. Navigiere zu **SQL Editor** (linke Sidebar)
 3. Klicke auf **New Query**
-4. Kopiere den kompletten Inhalt aus `migrations/009_enable_rls_policies.sql`
+4. Kopiere den kompletten Inhalt aus `migrations/001_initial_schema.sql`
 5. Füge ihn in den SQL Editor ein
 6. Klicke auf **Run** (oder Ctrl+Enter)
 
@@ -30,14 +30,14 @@ npm install -g supabase
 supabase link --project-ref your-project-ref
 
 # Migration ausführen:
-supabase db push migrations/009_enable_rls_policies.sql
+supabase db push migrations/001_initial_schema.sql
 ```
 
 ### Option 3: Manuell via psql
 
 ```bash
 psql "postgresql://postgres:[YOUR-PASSWORD]@db.[YOUR-PROJECT].supabase.co:5432/postgres" \
-  -f migrations/009_enable_rls_policies.sql
+  -f migrations/001_initial_schema.sql
 ```
 
 ## Was macht die Migration?

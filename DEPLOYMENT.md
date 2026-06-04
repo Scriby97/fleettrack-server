@@ -111,10 +111,10 @@ git push origin main
 
 ## 🗄️ Datenbank Migration (Supabase)
 
-### RLS Migration ausführen (falls noch nicht gemacht)
+### Baseline Migration ausführen
 
 1. Gehe zu Supabase Dashboard → SQL Editor
-2. Öffne `migrations/009_enable_rls_policies.sql`
+2. Öffne `migrations/001_initial_schema.sql`
 3. Kopiere den gesamten Inhalt
 4. Führe im SQL Editor aus
 5. Prüfe Security Advisor → sollte keine Errors mehr zeigen
@@ -132,7 +132,7 @@ Stelle sicher, dass das Backend den **Service Role Key** nutzt (nicht Anon Key):
 
 ### Vor dem Deployment
 
-- [ ] Alle Migrationen auf Supabase ausgeführt (001-009)
+- [ ] Baseline Migration auf Supabase ausgeführt (`001_initial_schema.sql`)
 - [ ] RLS aktiviert und getestet
 - [ ] `.env.example` aktualisiert mit Produktions-URLs
 - [ ] CORS in `main.ts` enthält Frontend-URL
