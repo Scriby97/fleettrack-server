@@ -1,4 +1,15 @@
-import { Controller, Get, Post, Body, Delete, Param, Put, Query, BadRequestException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Delete,
+  Param,
+  Put,
+  Query,
+  BadRequestException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { VehiclesService } from './vehicles.service';
 import { CreateVehicleDto } from './dto/create-vehicle.dto';
 import { UpdateVehicleDto } from './dto/update-vehicle.dto';
@@ -7,25 +18,43 @@ import type { AuthUser } from '../auth/decorators/current-user.decorator';
 import { CurrentOrganization } from '../auth/decorators/current-organization.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '../auth/enums/user-role.enum';
+import { OrganizationMembersService } from '../organizations/organization-members.service';
 
 @Controller('vehicles')
 export class VehiclesController {
-  constructor(private readonly vehiclesService: VehiclesService) {}
+  constructor(
+    private readonly vehiclesService: VehiclesService,
+    private readonly membersService: OrganizationMembersService,
+  ) {}
+
+  /**
+   * Ermittelt die Organisation(en), auf die eine Anfrage gescoped werden soll.
+   * Administratoren: kein Filter (undefined), optional per ?organizationId= einschränkbar.
+   * Normale User: alle Organisationen, in denen sie Mitglied sind (leeres Array = keine).
+   */
+  private async resolveOrganizationIds(
+    user: AuthUser,
+    queryOrgId?: string,
+  ): Promise<string[] | undefined> {
+    if (user.role === UserRole.ADMINISTRATOR) {
+      return queryOrgId ? [queryOrgId] : undefined;
+    }
+    return this.membersService.getOrganizationIds(user.id);
+  }
 
   /**
    * GET /vehicles
    * Alle Fahrzeuge abrufen (benötigt Auth)
    * Administratoren sehen alle oder können mit ?organizationId=... filtern
-   * Andere Rollen sehen nur ihre Organisation
+   * Andere Rollen sehen nur ihre eigenen Organisation(en)
    */
   @Get()
-  getAll(
+  async getAll(
     @CurrentUser() user: AuthUser,
-    @CurrentOrganization() organizationId?: string,
     @Query('organizationId') queryOrgId?: string,
   ) {
-    const filterOrgId = user.role === UserRole.ADMINISTRATOR ? (queryOrgId || undefined) : organizationId;
-    return this.vehiclesService.findAll(filterOrgId);
+    const organizationIds = await this.resolveOrganizationIds(user, queryOrgId);
+    return this.vehiclesService.findAll(organizationIds);
   }
 
   /**
@@ -34,30 +63,38 @@ export class VehiclesController {
    * Administratoren können optional ?organizationId=... übergeben, um eine bestimmte Organisation zu filtern
    */
   @Get('stats')
-  getStats(
+  async getStats(
     @CurrentUser() user: AuthUser,
-    @CurrentOrganization() organizationId?: string,
     @Query('organizationId') queryOrgId?: string,
   ) {
-    let filterOrgId: string | undefined;
-    if (user.role === UserRole.ADMINISTRATOR) {
-      filterOrgId = queryOrgId || undefined; // Administrator kann optional filtern
-    } else {
-      filterOrgId = organizationId; // Normale Benutzer sehen nur ihre Organisation
-    }
-    return this.vehiclesService.stats(filterOrgId);
+    const organizationIds = await this.resolveOrganizationIds(user, queryOrgId);
+    return this.vehiclesService.stats(organizationIds);
   }
 
   /**
    * GET /vehicles/:vehicleId/last-operating-hours
    * Letzte endOperatingHours eines Fahrzeugs abrufen (benötigt Auth)
+   * Normale User dürfen dies nur für Fahrzeuge ihrer eigenen Organisation(en)
    */
   @Get(':vehicleId/last-operating-hours')
   async getLastOperatingHours(
     @Param('vehicleId') vehicleId: string,
     @CurrentUser() user: AuthUser,
   ) {
-    const endOperatingHours = await this.vehiclesService.getLastOperatingHours(vehicleId);
+    if (user.role !== UserRole.ADMINISTRATOR) {
+      const organizationIds = await this.membersService.getOrganizationIds(
+        user.id,
+      );
+      const vehicle = await this.vehiclesService.findOne(vehicleId);
+      if (!vehicle || !organizationIds.includes(vehicle.organizationId)) {
+        throw new ForbiddenException(
+          'Fahrzeug gehört nicht zu deiner Organisation',
+        );
+      }
+    }
+
+    const endOperatingHours =
+      await this.vehiclesService.getLastOperatingHours(vehicleId);
     return { endOperatingHours };
   }
 

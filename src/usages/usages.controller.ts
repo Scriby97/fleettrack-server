@@ -1,46 +1,62 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Body,
+  Param,
+  Query,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { UsagesService } from './usages.service';
+import { VehiclesService } from '../vehicles/vehicles.service';
 import { CreateUsageDto } from './dto/create-usage.dto';
 import { UpdateUsageDto } from './dto/update-usage.dto';
 import { UsageEntity } from './usage.entity';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthUser } from '../auth/decorators/current-user.decorator';
-import { CurrentOrganization } from '../auth/decorators/current-organization.decorator';
 import { UserRole } from '../auth/enums/user-role.enum';
+import { OrganizationMembersService } from '../organizations/organization-members.service';
 
 @Controller('usages')
 export class UsagesController {
-  constructor(private readonly usagesService: UsagesService) {}
+  constructor(
+    private readonly usagesService: UsagesService,
+    private readonly vehiclesService: VehiclesService,
+    private readonly membersService: OrganizationMembersService,
+  ) {}
+
+  /**
+   * Ermittelt die Organisation(en), auf die eine Anfrage gescoped werden soll.
+   * Administratoren: kein Filter (undefined), optional per ?organizationId= einschränkbar.
+   * Normale User: alle Organisationen, in denen sie Mitglied sind (leeres Array = keine).
+   */
+  private async resolveOrganizationIds(
+    user: AuthUser,
+    queryOrgId?: string,
+  ): Promise<string[] | undefined> {
+    if (user.role === UserRole.ADMINISTRATOR) {
+      return queryOrgId ? [queryOrgId] : undefined;
+    }
+    return this.membersService.getOrganizationIds(user.id);
+  }
 
   /**
    * GET /usages/with-vehicles
    * Alle Nutzungen mit Fahrzeug-Daten abrufen (benötigt Auth)
    * Administratoren sehen alle Usages oder können mit ?organizationId=... filtern
-   * Normale Users sehen ihre Organisation
-   * Normale Users ohne bestimmte Org sehen nur ihre eigenen Usages
+   * Normale Users sehen nur Usages ihrer eigenen Organisation(en)
    */
   @Get('with-vehicles')
   async getAllWithVehicles(
     @CurrentUser() user: AuthUser,
-    @CurrentOrganization() organizationId?: string,
     @Query('organizationId') queryOrgId?: string,
   ) {
-    let filterOrgId: string | undefined;
-    let filterCreatorId: string | undefined;
-
-    if (user.role === UserRole.ADMINISTRATOR) {
-      // Administratoren können optional nach einer bestimmten Org filtern
-      filterOrgId = queryOrgId || undefined;
-    } else {
-      // Normale Users sehen ihre Organisationen
-      filterOrgId = organizationId;
-      // Falls kein Org-Kontext, nur eigene Usages
-      if (!organizationId) {
-        filterCreatorId = user.id;
-      }
-    }
-
-    const usages = await this.usagesService.findAllWithVehicles(filterOrgId, filterCreatorId);
+    const organizationIds = await this.resolveOrganizationIds(user, queryOrgId);
+    const usages =
+      await this.usagesService.findAllWithVehicles(organizationIds);
     return { usages };
   }
 
@@ -48,29 +64,28 @@ export class UsagesController {
    * GET /usages
    * Alle Nutzungen abrufen (benötigt Auth)
    * Administratoren sehen alle Usages oder können mit ?organizationId=... filtern
-   * Normale Users sehen nur Usages ihrer Organisationen
+   * Normale Users sehen nur Usages ihrer eigenen Organisation(en)
    */
   @Get()
-  getAll(
+  async getAll(
     @CurrentUser() user: AuthUser,
-    @CurrentOrganization() organizationId?: string,
     @Query('organizationId') queryOrgId?: string,
   ) {
-    let filterOrgId: string | undefined;
-    if (user.role === UserRole.ADMINISTRATOR) {
-      filterOrgId = queryOrgId || undefined; // Administrator kann optional nach Org filtern
-    } else {
-      filterOrgId = organizationId; // Andere Rollen sehen nur ihre Organisationen
-    }
-    return this.usagesService.findAll(filterOrgId);
+    const organizationIds = await this.resolveOrganizationIds(user, queryOrgId);
+    return this.usagesService.findAll(organizationIds);
   }
 
   /**
    * POST /usages
    * Neue Nutzung erstellen (benötigt Auth)
+   * Normale User dürfen nur Usages für Fahrzeuge ihrer eigenen Organisation(en) erstellen
    */
   @Post()
-  create(@Body() dto: CreateUsageDto, @CurrentUser() user: AuthUser) {
+  async create(@Body() dto: CreateUsageDto, @CurrentUser() user: AuthUser) {
+    if (user.role !== UserRole.ADMINISTRATOR) {
+      await this.assertVehicleInUsersOrganization(dto.vehicleId, user);
+    }
+
     // transform DTO to a Partial<UsageEntity> and pass to service
     const partial: Partial<UsageEntity> = {
       vehicleId: dto.vehicleId,
@@ -87,13 +102,18 @@ export class UsagesController {
   /**
    * PUT /usages/:id
    * Usage aktualisieren (benötigt Auth)
+   * Normale User dürfen nur Usages ihrer eigenen Organisation(en) bearbeiten
    */
   @Put(':id')
-  update(
+  async update(
     @Param('id') id: string,
     @Body() dto: UpdateUsageDto,
     @CurrentUser() user: AuthUser,
   ) {
+    if (user.role !== UserRole.ADMINISTRATOR) {
+      await this.assertUsageInUsersOrganization(id, user);
+    }
+
     const partial: Partial<UsageEntity> = {
       ...dto,
     };
@@ -103,10 +123,51 @@ export class UsagesController {
   /**
    * DELETE /usages/:id
    * Usage löschen (benötigt Auth)
+   * Normale User dürfen nur Usages ihrer eigenen Organisation(en) löschen
    */
   @Delete(':id')
   async remove(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    if (user.role !== UserRole.ADMINISTRATOR) {
+      await this.assertUsageInUsersOrganization(id, user);
+    }
+
     await this.usagesService.delete(id);
     return { message: 'Usage gelöscht', id };
+  }
+
+  private async assertVehicleInUsersOrganization(
+    vehicleId: string,
+    user: AuthUser,
+  ): Promise<void> {
+    const organizationIds = await this.membersService.getOrganizationIds(
+      user.id,
+    );
+    if (organizationIds.length === 0) {
+      throw new ForbiddenException('Du gehörst keiner Organisation an');
+    }
+
+    const vehicle = await this.vehiclesService.findOne(vehicleId);
+    if (!vehicle || !organizationIds.includes(vehicle.organizationId)) {
+      throw new ForbiddenException(
+        'Fahrzeug gehört nicht zu deiner Organisation',
+      );
+    }
+  }
+
+  private async assertUsageInUsersOrganization(
+    usageId: string,
+    user: AuthUser,
+  ): Promise<void> {
+    const usage = await this.usagesService.findOne(usageId);
+    if (!usage) {
+      throw new NotFoundException(`Usage with id ${usageId} not found`);
+    }
+
+    const organizationIds = await this.membersService.getOrganizationIds(
+      user.id,
+    );
+    if (!organizationIds.includes(usage.vehicle.organizationId)) {
+      throw new ForbiddenException('Usage gehört nicht zu deiner Organisation');
+    }
   }
 }

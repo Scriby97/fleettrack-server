@@ -54,6 +54,19 @@ export class OrganizationMembersService {
     });
   }
 
+  /**
+   * IDs aller Organisationen, in denen ein User Mitglied ist.
+   * Für Daten-Scoping bei normalen Usern (vehicles/usages) - ein leeres Array
+   * bedeutet, der User gehört keiner Organisation an und darf keine Daten sehen.
+   */
+  async getOrganizationIds(userId: string): Promise<string[]> {
+    const memberships = await this.memberRepository.find({
+      where: { userId },
+      select: ['organizationId'],
+    });
+    return memberships.map((membership) => membership.organizationId);
+  }
+
   async updateRole(
     organizationId: string,
     memberId: string,

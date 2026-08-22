@@ -1,6 +1,11 @@
-import { Injectable, NotFoundException, ForbiddenException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  Logger,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { VehicleEntity } from './vehicle.entity';
 import { UsageEntity } from '../usages/usage.entity';
 import { UserRole } from '../auth/enums/user-role.enum';
@@ -39,21 +44,41 @@ export class VehiclesService {
     private readonly usageRepo: Repository<UsageEntity>,
   ) {}
 
-  async findAll(organizationId?: string, includeRetired = false): Promise<Vehicle[]> {
-    const where: any = {};
-    
-    if (organizationId) {
-      where.organizationId = organizationId;
+  /**
+   * @param organizationIds - undefined = kein Org-Filter (nur für Administratoren zulässig),
+   * leeres Array = User gehört keiner Organisation an -> keine Fahrzeuge sichtbar
+   */
+  async findAll(
+    organizationIds?: string[],
+    includeRetired = false,
+  ): Promise<Vehicle[]> {
+    if (organizationIds && organizationIds.length === 0) {
+      return [];
     }
-    
+
+    const where: any = {};
+
+    if (organizationIds) {
+      where.organizationId = In(organizationIds);
+    }
+
     if (!includeRetired) {
       where.isRetired = false;
     }
-    
+
     return this.repo.find({ where });
   }
 
-  async create(data: Partial<Vehicle> & { organizationId: string }): Promise<Vehicle> {
+  /**
+   * Ein einzelnes Fahrzeug per ID abrufen (ohne Org-Check - Aufrufer prüft Berechtigung)
+   */
+  async findOne(id: string): Promise<VehicleEntity | null> {
+    return this.repo.findOne({ where: { id } });
+  }
+
+  async create(
+    data: Partial<Vehicle> & { organizationId: string },
+  ): Promise<Vehicle> {
     const v = this.repo.create(data);
     return this.repo.save(v);
   }
@@ -63,10 +88,15 @@ export class VehiclesService {
    * - totalWorkHours: sum of (endTime - startTime) in hours
    * - totalFuelLiters: sum of fuelLitersRefilled
    */
-  async stats(organizationId?: string): Promise<VehicleStats[]> {
+  async stats(organizationIds?: string[]): Promise<VehicleStats[]> {
+    if (organizationIds && organizationIds.length === 0) {
+      return [];
+    }
+
     // Query vehicles left-joined with usages and aggregate
     try {
-      const qb = this.repo.createQueryBuilder('v')
+      const qb = this.repo
+        .createQueryBuilder('v')
         .leftJoin(UsageEntity, 'u', 'u.vehicleId = v.id')
         .select([
           'v.id as id',
@@ -82,11 +112,15 @@ export class VehiclesService {
           'COALESCE(SUM(u.endOperatingHours - u.startOperatingHours), 0) as "totalWorkHours"',
           'COALESCE(SUM(u.fuelLitersRefilled), 0) as "totalFuelLiters"',
         ])
-        .groupBy('v.id, v.name, v.plate, v.snowsatNumber, v.isRetired, v.location, v.vehicleType, v.fuelType, v.notes, v.organizationId');
+        .groupBy(
+          'v.id, v.name, v.plate, v.snowsatNumber, v.isRetired, v.location, v.vehicleType, v.fuelType, v.notes, v.organizationId',
+        );
 
       // Filter by organization if provided
-      if (organizationId) {
-        qb.where('v.organizationId = :organizationId', { organizationId });
+      if (organizationIds) {
+        qb.where('v.organizationId IN (:...organizationIds)', {
+          organizationIds,
+        });
       }
 
       // Log the generated SQL and parameters to help debugging
@@ -101,7 +135,7 @@ export class VehiclesService {
       const raw = await qb.getRawMany();
 
       // convert string numbers to real numbers
-      return raw.map(r => ({
+      return raw.map((r) => ({
         id: r.id,
         name: r.name,
         plate: r.plate,
@@ -146,14 +180,19 @@ export class VehiclesService {
     organizationId?: string,
   ): Promise<Vehicle> {
     const vehicle = await this.repo.findOne({ where: { id } });
-    
+
     if (!vehicle) {
       throw new NotFoundException(`Vehicle with ID ${id} not found`);
     }
 
     // Check authorization: Administrators can update all vehicles, users only their own organization
-    if (userRole !== UserRole.ADMINISTRATOR && vehicle.organizationId !== organizationId) {
-      throw new ForbiddenException('You can only update vehicles in your organization');
+    if (
+      userRole !== UserRole.ADMINISTRATOR &&
+      vehicle.organizationId !== organizationId
+    ) {
+      throw new ForbiddenException(
+        'You can only update vehicles in your organization',
+      );
     }
 
     // Update the vehicle
@@ -172,14 +211,19 @@ export class VehiclesService {
     organizationId?: string,
   ): Promise<{ deleted: boolean; retired: boolean; message: string }> {
     const vehicle = await this.repo.findOne({ where: { id } });
-    
+
     if (!vehicle) {
       throw new NotFoundException(`Vehicle with ID ${id} not found`);
     }
 
     // Check authorization: Administrators can delete all vehicles, users only their own organization
-    if (userRole !== UserRole.ADMINISTRATOR && vehicle.organizationId !== organizationId) {
-      throw new ForbiddenException('You can only delete vehicles in your organization');
+    if (
+      userRole !== UserRole.ADMINISTRATOR &&
+      vehicle.organizationId !== organizationId
+    ) {
+      throw new ForbiddenException(
+        'You can only delete vehicles in your organization',
+      );
     }
 
     // Check if vehicle has any usages

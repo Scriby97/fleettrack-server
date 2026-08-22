@@ -11,48 +11,54 @@ export class UsagesService {
   ) {}
 
   /**
-   * Find all usages, optionally filtered by organizationId
+   * Find all usages, optionally filtered by organization membership
    * Uses JOIN with vehicles table since usages don't have direct organizationId
+   * @param organizationIds - undefined = kein Filter (nur Administratoren), leeres Array = keine Organisation -> keine Usages
    */
-  async findAll(organizationId?: string): Promise<UsageEntity[]> {
-    if (organizationId) {
-      // Filter by organizationId through vehicles table
+  async findAll(organizationIds?: string[]): Promise<UsageEntity[]> {
+    if (organizationIds && organizationIds.length === 0) {
+      return [];
+    }
+
+    if (organizationIds) {
       return this.repo
         .createQueryBuilder('usage')
         .innerJoin('usage.vehicle', 'vehicle')
-        .where('vehicle.organizationId = :organizationId', { organizationId })
+        .where('vehicle.organizationId IN (:...organizationIds)', {
+          organizationIds,
+        })
         .getMany();
     }
-    // Super Admin without organization filter sees all usages
+    // Administrator ohne Organisations-Filter sieht alle Usages
     return this.repo.find();
   }
 
   /**
    * Find all usages with vehicle data included
    * Returns usages with nested vehicle information (id, name, plate)
-   * @param organizationId - Filter by organization
-   * @param creatorId - Filter by creator (for regular users)
+   * @param organizationIds - undefined = kein Filter (nur Administratoren), leeres Array = keine Organisation -> keine Usages
    */
-  async findAllWithVehicles(organizationId?: string, creatorId?: string): Promise<any[]> {
+  async findAllWithVehicles(organizationIds?: string[]): Promise<any[]> {
+    if (organizationIds && organizationIds.length === 0) {
+      return [];
+    }
+
     const queryBuilder = this.repo
       .createQueryBuilder('usage')
       .innerJoinAndSelect('usage.vehicle', 'vehicle')
       .innerJoinAndSelect('usage.creator', 'creator')
       .orderBy('usage.creationDate', 'DESC');
 
-    if (organizationId) {
-      queryBuilder.where('vehicle.organizationId = :organizationId', { organizationId });
-    }
-
-    // If creatorId is provided, filter by creator (for regular users)
-    if (creatorId) {
-      queryBuilder.andWhere('usage.creatorId = :creatorId', { creatorId });
+    if (organizationIds) {
+      queryBuilder.where('vehicle.organizationId IN (:...organizationIds)', {
+        organizationIds,
+      });
     }
 
     const usages = await queryBuilder.getMany();
 
     // Transform to match expected response format
-    return usages.map(usage => ({
+    return usages.map((usage) => ({
       id: usage.id,
       vehicleId: usage.vehicleId,
       creatorId: usage.creatorId,
@@ -74,6 +80,13 @@ export class UsagesService {
     }));
   }
 
+  /**
+   * Eine einzelne Usage inkl. Fahrzeug abrufen (ohne Org-Check - Aufrufer prüft Berechtigung)
+   */
+  async findOne(id: string): Promise<UsageEntity | null> {
+    return this.repo.findOne({ where: { id }, relations: ['vehicle'] });
+  }
+
   // Accept a DeepPartial<UsageEntity> so callers (controllers or other services)
   // can pass either a DTO or a partially-built entity.
   async create(data: DeepPartial<UsageEntity>): Promise<UsageEntity> {
@@ -83,11 +96,14 @@ export class UsagesService {
       endOperatingHours: data.endOperatingHours,
       fuelLitersRefilled: (data.fuelLitersRefilled ?? 0) as any,
     };
-    const saved = await this.repo.save(this.repo.create(toSave) as UsageEntity);
+    const saved = await this.repo.save(this.repo.create(toSave));
     return saved;
   }
 
-  async update(id: string, data: DeepPartial<UsageEntity>): Promise<UsageEntity> {
+  async update(
+    id: string,
+    data: DeepPartial<UsageEntity>,
+  ): Promise<UsageEntity> {
     await this.repo.update(id, data);
     const updated = await this.repo.findOne({ where: { id } });
     if (!updated) {
