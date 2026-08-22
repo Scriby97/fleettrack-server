@@ -6,6 +6,7 @@ import { OrganizationsController } from './organizations.controller';
 import { InvitesController } from './invites.controller';
 import { OrganizationEntity } from './organization.entity';
 import { OrganizationMemberEntity } from './organization-member.entity';
+import { OrganizationSubscriptionEntity } from './organization-subscription.entity';
 import { OrganizationInviteEntity } from './entities/organization-invite.entity';
 import { UserProfileEntity } from '../auth/entities/user-profile.entity';
 import { AuthModule } from '../auth/auth.module';
@@ -15,6 +16,7 @@ import { AuthModule } from '../auth/auth.module';
     TypeOrmModule.forFeature([
       OrganizationEntity,
       OrganizationMemberEntity,
+      OrganizationSubscriptionEntity,
       OrganizationInviteEntity,
       UserProfileEntity,
     ]),

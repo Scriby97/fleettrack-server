@@ -8,6 +8,7 @@ import { UsageEntity } from './usages/usage.entity';
 import { UserProfileEntity } from './auth/entities/user-profile.entity';
 import { OrganizationEntity } from './organizations/organization.entity';
 import { OrganizationMemberEntity } from './organizations/organization-member.entity';
+import { OrganizationSubscriptionEntity } from './organizations/organization-subscription.entity';
 import { OrganizationInviteEntity } from './organizations/entities/organization-invite.entity';
 import { UsagesService } from './usages/usages.service';
 import { VehiclesController } from './vehicles/vehicles.controller';
@@ -32,6 +33,7 @@ import { OrganizationsModule } from './organizations/organizations.module';
         UserProfileEntity,
         OrganizationEntity,
         OrganizationMemberEntity,
+        OrganizationSubscriptionEntity,
         OrganizationInviteEntity,
       ],
       synchronize: false, // Temporär deaktiviert - wir machen Migrations manuell

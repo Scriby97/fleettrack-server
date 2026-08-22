@@ -98,6 +98,21 @@
   - N:1 zu `user_profiles`
   - N:1 zu `organizations`
 
+### 3b. organization_subscriptions (NEW)
+- **Primary Key**: `id`
+- **Foreign Keys**: `organizationId` → `organizations.id` (ON DELETE CASCADE)
+- **Unique Constraint**: `organizationId` - maximal 1 Subscription pro Organisation
+- **Spalten**:
+  - `tier`: Stabiler Plan-Key (nicht der Anzeigename!) - `'lieutenant'`, `'captain'` oder `'general'`
+    - `'lieutenant'`: Free - bis 2 Fahrzeuge, 5 Mitarbeiter
+    - `'captain'`: CHF 99.-/Monat - bis 20 Fahrzeuge, 50 Mitarbeiter
+    - `'general'`: CHF 199.-/Monat - unlimitiert
+    - Limits/Preise sind bewusst NICHT in der DB, sondern in `SUBSCRIPTION_LIMITS` im Code hinterlegt, damit sich Anzeigenamen/Preise ändern lassen ohne Datenmigration
+  - `status`: Billing-Status - `'active'`, `'past_due'` oder `'canceled'`
+  - `stripeCustomerId` / `stripeSubscriptionId`: Für spätere Stripe-Integration vorgesehen (nullable)
+- **Beziehungen**:
+  - 1:1 zu `organizations`
+
 ### 4. vehicles
 - **Primary Key**: `id`
 - **Foreign Keys**: 
