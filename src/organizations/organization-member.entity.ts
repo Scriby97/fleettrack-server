@@ -8,8 +8,8 @@ import {
   Index,
   Unique,
 } from 'typeorm';
-import { UserProfileEntity } from '../../auth/entities/user-profile.entity';
-import { OrganizationEntity } from '../organization.entity';
+import { UserProfileEntity } from '../auth/entities/user-profile.entity';
+import { OrganizationEntity } from './organization.entity';
 
 /**
  * Junction table for user-organization memberships
