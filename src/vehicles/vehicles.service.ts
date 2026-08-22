@@ -151,8 +151,8 @@ export class VehiclesService {
       throw new NotFoundException(`Vehicle with ID ${id} not found`);
     }
 
-    // Check authorization: Regular admins can only update vehicles in their organization
-    if (userRole !== UserRole.SUPER_ADMIN && vehicle.organizationId !== organizationId) {
+    // Check authorization: Administrators can update all vehicles, users only their own organization
+    if (userRole !== UserRole.ADMINISTRATOR && vehicle.organizationId !== organizationId) {
       throw new ForbiddenException('You can only update vehicles in your organization');
     }
 
@@ -177,8 +177,8 @@ export class VehiclesService {
       throw new NotFoundException(`Vehicle with ID ${id} not found`);
     }
 
-    // Check authorization: Regular admins can only delete vehicles in their organization
-    if (userRole !== UserRole.SUPER_ADMIN && vehicle.organizationId !== organizationId) {
+    // Check authorization: Administrators can delete all vehicles, users only their own organization
+    if (userRole !== UserRole.ADMINISTRATOR && vehicle.organizationId !== organizationId) {
       throw new ForbiddenException('You can only delete vehicles in your organization');
     }
 

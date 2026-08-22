@@ -15,7 +15,7 @@ export class VehiclesController {
   /**
    * GET /vehicles
    * Alle Fahrzeuge abrufen (benötigt Auth)
-   * Super-Admins sehen alle oder können mit ?organizationId=... filtern
+   * Administratoren sehen alle oder können mit ?organizationId=... filtern
    * Andere Rollen sehen nur ihre Organisation
    */
   @Get()
@@ -24,14 +24,14 @@ export class VehiclesController {
     @CurrentOrganization() organizationId?: string,
     @Query('organizationId') queryOrgId?: string,
   ) {
-    const filterOrgId = user.role === UserRole.SUPER_ADMIN ? (queryOrgId || undefined) : organizationId;
+    const filterOrgId = user.role === UserRole.ADMINISTRATOR ? (queryOrgId || undefined) : organizationId;
     return this.vehiclesService.findAll(filterOrgId);
   }
 
   /**
    * GET /vehicles/stats
    * Fahrzeug-Statistiken abrufen (benötigt Auth)
-   * Super-Admins können optional ?organizationId=... übergeben, um eine bestimmte Organisation zu filtern
+   * Administratoren können optional ?organizationId=... übergeben, um eine bestimmte Organisation zu filtern
    */
   @Get('stats')
   getStats(
@@ -40,10 +40,10 @@ export class VehiclesController {
     @Query('organizationId') queryOrgId?: string,
   ) {
     let filterOrgId: string | undefined;
-    if (user.role === UserRole.SUPER_ADMIN) {
-      filterOrgId = queryOrgId || undefined; // Super-Admin kann optional filtern
+    if (user.role === UserRole.ADMINISTRATOR) {
+      filterOrgId = queryOrgId || undefined; // Administrator kann optional filtern
     } else {
-      filterOrgId = organizationId; // Normale Admins sehen nur ihre Organisation
+      filterOrgId = organizationId; // Normale Benutzer sehen nur ihre Organisation
     }
     return this.vehiclesService.stats(filterOrgId);
   }
@@ -63,16 +63,16 @@ export class VehiclesController {
 
   /**
    * POST /vehicles
-   * Neues Fahrzeug erstellen (nur für Admins)
+   * Neues Fahrzeug erstellen (nur für Administratoren)
    */
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ADMINISTRATOR)
   @Post()
   create(
     @Body() dto: CreateVehicleDto,
     @CurrentUser() user: AuthUser,
     @CurrentOrganization() organizationId?: string,
   ) {
-    // Verwende die Organization des Users, außer Super-Admin gibt explizit eine an
+    // Verwende die Organization des Users, außer Administrator gibt explizit eine an
     const orgId = dto.organizationId || organizationId;
     if (!orgId) {
       throw new BadRequestException('Organization ID is required');
@@ -82,9 +82,9 @@ export class VehiclesController {
 
   /**
    * PUT /vehicles/:id
-   * Fahrzeug bearbeiten (nur für Admins)
+   * Fahrzeug bearbeiten (nur für Administratoren)
    */
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ADMINISTRATOR)
   @Put(':id')
   update(
     @Param('id') id: string,
@@ -97,11 +97,11 @@ export class VehiclesController {
 
   /**
    * DELETE /vehicles/:id
-   * Fahrzeug löschen (nur für Admins)
+   * Fahrzeug löschen (nur für Administratoren)
    * Fahrzeuge mit Nutzungen werden als ausgemustert markiert,
    * Fahrzeuge ohne Nutzungen werden permanent gelöscht
    */
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ADMINISTRATOR)
   @Delete(':id')
   delete(
     @Param('id') id: string,

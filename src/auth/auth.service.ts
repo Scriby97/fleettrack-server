@@ -73,10 +73,9 @@ export class AuthService {
       throw new UnauthorizedException(this.translateSupabaseError(error.message));
     }
 
-    // Hole User-Profile mit Rolle und Organization aus DB
+    // Hole User-Profile mit globaler Rolle
     const profile = await this.profileRepo.findOne({
       where: { id: data.user.id },
-      relations: ['organization'],
     });
 
     return {
@@ -85,21 +84,19 @@ export class AuthService {
       user: {
         ...data.user,
         role: profile?.role || UserRole.USER,
-        organizationId: profile?.organizationId,
-        organization: profile?.organization,
       },
     };
   }
 
   /**
    * Registrierung mit Email und Passwort
+   * Neue User bekommen standardmäßig die Rolle "user" (kein Administrator)
    */
   async signUp(
     email: string,
     password: string,
     metadata?: any,
     role: UserRole = UserRole.USER,
-    organizationId?: string,
   ) {
     // Prüfe ob User bereits existiert
     const existingProfile = await this.profileRepo.findOne({ 
@@ -121,7 +118,6 @@ export class AuthService {
         data: {
           ...metadata,
           role,
-          organizationId,
         },
       },
     });
@@ -136,7 +132,6 @@ export class AuthService {
         id: data.user.id,
         email: data.user.email!,
         role,
-        organizationId,
         firstName: metadata?.firstName,
         lastName: metadata?.lastName,
       });
@@ -203,12 +198,11 @@ export class AuthService {
 
   /**
    * Admin: Passwort-Reset Email an einen User senden
-   * Super-Admins dürfen alle User, Admins nur innerhalb ihrer Organization
+   * Nur Administratoren dürfen alle User, normale User dürfen keine Passwort-Resets machen
    */
   async adminResetPasswordByUserId(
     userId: string,
     requesterRole: UserRole,
-    requesterOrganizationId?: string,
   ) {
     const targetProfile = await this.profileRepo.findOne({ where: { id: userId } });
 
@@ -216,10 +210,9 @@ export class AuthService {
       throw new UnauthorizedException('User nicht gefunden');
     }
 
-    if (requesterRole === UserRole.ADMIN) {
-      if (!requesterOrganizationId || targetProfile.organizationId !== requesterOrganizationId) {
-        throw new ForbiddenException('Kein Zugriff auf User außerhalb der Organization');
-      }
+    // Nur Administratoren dürfen Password-Resets initiieren
+    if (requesterRole !== UserRole.ADMINISTRATOR) {
+      throw new ForbiddenException('Nur Administratoren dürfen Passwort-Resets durchführen');
     }
 
     const supabase = this.supabaseService.getClient();
@@ -260,7 +253,8 @@ export class AuthService {
   }
 
   /**
-   * User-Rolle ändern (nur für Admins)
+   * User-Rolle ändern (nur für Administratoren)
+   * Setzt die globale funktionale Rolle (user oder administrator)
    */
   async updateUserRole(userId: string, newRole: UserRole) {
     const profile = await this.profileRepo.findOne({ where: { id: userId } });
@@ -276,17 +270,12 @@ export class AuthService {
   }
 
   /**
-   * Alle User mit Profilen abrufen (nur für Admins)
-   * Super-Admins sehen alle User, normale Admins nur ihre Organization
+   * Alle User abrufen (nur für Administratoren)
    */
-  async getAllUsers(organizationId?: string) {
-    if (organizationId) {
-      return this.profileRepo.find({
-        where: { organizationId },
-        relations: ['organization'],
-      });
-    }
-    return this.profileRepo.find({ relations: ['organization'] });
+  async getAllUsers() {
+    return this.profileRepo.find({
+      relations: ['organizationMemberships'],
+    });
   }
 
   /**
@@ -295,7 +284,7 @@ export class AuthService {
   async getUserProfile(userId: string) {
     return this.profileRepo.findOne({
       where: { id: userId },
-      relations: ['organization'],
+      relations: ['organizationMemberships'],
     });
   }
 }

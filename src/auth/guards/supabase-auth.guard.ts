@@ -96,7 +96,6 @@ export class SupabaseAuthGuard implements CanActivate {
         email: user.email,
         ...user.user_metadata,
         role: profile.role, // DB-Rolle hat Priorität über metadata
-        organizationId: profile.organizationId, // Organisation des Users
       };
 
       this.logger.debug(`User Rolle: ${request.user.role}`);
@@ -106,7 +105,8 @@ export class SupabaseAuthGuard implements CanActivate {
       if (error instanceof UnauthorizedException) {
         throw error;
       }
-      this.logger.error(`Token-Validierung fehlgeschlagen: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(`Token-Validierung fehlgeschlagen: ${errorMessage}`);
       throw new UnauthorizedException('Token-Validierung fehlgeschlagen');
     }
   }

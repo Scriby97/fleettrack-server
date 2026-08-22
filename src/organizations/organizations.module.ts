@@ -5,13 +5,19 @@ import { OrganizationsInvitesService } from './organizations-invites.service';
 import { OrganizationsController } from './organizations.controller';
 import { InvitesController } from './invites.controller';
 import { OrganizationEntity } from './organization.entity';
+import { OrganizationMemberEntity } from './organization-member.entity';
 import { OrganizationInviteEntity } from './entities/organization-invite.entity';
 import { UserProfileEntity } from '../auth/entities/user-profile.entity';
 import { AuthModule } from '../auth/auth.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([OrganizationEntity, OrganizationInviteEntity, UserProfileEntity]),
+    TypeOrmModule.forFeature([
+      OrganizationEntity,
+      OrganizationMemberEntity,
+      OrganizationInviteEntity,
+      UserProfileEntity,
+    ]),
     AuthModule,
   ],
   controllers: [OrganizationsController, InvitesController],

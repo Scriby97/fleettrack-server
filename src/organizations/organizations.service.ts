@@ -5,7 +5,7 @@ import { OrganizationEntity } from './organization.entity';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
 import { OrganizationsInvitesService } from './organizations-invites.service';
-import { UserRole } from '../auth/enums/user-role.enum';
+import { OrganizationRole } from '../auth/enums/user-role.enum';
 
 @Injectable()
 export class OrganizationsService {
@@ -35,9 +35,9 @@ export class OrganizationsService {
       savedOrganization.id,
       {
         email: createOrganizationDto.adminEmail,
-        role: createOrganizationDto.adminRole || UserRole.ADMIN,
+        role: createOrganizationDto.adminRole || OrganizationRole.ADMIN,
       },
-      undefined, // invitedBy (Super Admin hat keine ID im Context)
+      undefined, // invitedBy (wird vom System erstellt, nicht von einem User)
     );
 
     return {

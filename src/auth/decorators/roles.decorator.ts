@@ -5,6 +5,6 @@ export const ROLES_KEY = 'roles';
 
 /**
  * Decorator um erforderliche Rollen für einen Endpoint zu definieren
- * Verwendung: @Roles(UserRole.ADMIN) oder @Roles(UserRole.ADMIN, UserRole.USER)
+ * Verwendung: @Roles(UserRole.ADMINISTRATOR) oder @Roles(UserRole.USER)
  */
 export const Roles = (...roles: UserRole[]) => SetMetadata(ROLES_KEY, roles);

@@ -38,7 +38,7 @@ export class OrganizationsController {
   ) {}
 
   @Post()
-  @Roles(UserRole.SUPER_ADMIN) // Nur Super-Admins können Organisationen erstellen
+  @Roles(UserRole.ADMINISTRATOR) // Nur Administratoren können Organisationen erstellen
   async create(@Body() createOrganizationDto: CreateOrganizationDto) {
     const result = await this.organizationsService.create(
       createOrganizationDto,
@@ -59,7 +59,7 @@ export class OrganizationsController {
   }
 
   @Get()
-  @Roles(UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ADMINISTRATOR)
   findAll() {
     return this.organizationsService.findAll();
   }
@@ -71,11 +71,12 @@ export class OrganizationsController {
   /**
    * POST /organizations/invites
    * Erstellt einen Invite-Link für die eigene Organization
-    * Admins können nur für ihre eigene Org inviten, SUPER_ADMINs für beliebige Orgs
-    * (mit ?organizationId=xxx oder organizationId im Body)
+   * Administratoren können für beliebige Orgs inviten,
+   * Normale User mit Org-Admin/Owner-Rolle nur für ihre eigene Org
+   * (mit ?organizationId=xxx oder organizationId im Body)
    */
   @Post('invites')
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ADMINISTRATOR) // Nur Administratoren erlaubt, Org-Admins haben weitere Checks
   createInvite(
     @Req() req: Request,
     @Body() createInviteDto: CreateInviteDto,
@@ -93,13 +94,13 @@ export class OrganizationsController {
       `createInvite called by user=${user.id} role=${user.role} queryOrgId=${queryOrgId || 'none'} bodyOrgId=${createInviteDto.organizationId || 'none'} userOrgId=${userOrgId || 'none'}`,
     );
 
-    // SUPER_ADMIN kann organizationId per Query oder Body angeben
+    // ADMINISTRATOR kann organizationId per Query oder Body angeben
     let targetOrgId: string;
-    const superAdminTargetOrgId = queryOrgId || createInviteDto.organizationId;
-    if (user.role === UserRole.SUPER_ADMIN && superAdminTargetOrgId) {
-      targetOrgId = superAdminTargetOrgId;
+    const adminTargetOrgId = queryOrgId || createInviteDto.organizationId;
+    if (user.role === UserRole.ADMINISTRATOR && adminTargetOrgId) {
+      targetOrgId = adminTargetOrgId;
     } else {
-      // Normale Admins verwenden ihre eigene Organization
+      // Normale Benutzer verwenden ihre eigene Organization
       if (!userOrgId) {
         throw new BadRequestException('You must belong to an organization to create invites');
       }
@@ -120,17 +121,17 @@ export class OrganizationsController {
   /**
    * GET /organizations/invites
    * Holt alle Invites der eigenen Organisation
-    * SUPER_ADMINs erhalten standardmäßig alle Invites oder mit ?organizationId=xxx nur eine Org
+   * Administratoren erhalten standardmäßig alle Invites oder mit ?organizationId=xxx nur eine Org
    */
   @Get('invites')
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ADMINISTRATOR)
   getInvites(
     @CurrentUser() user: AuthUser,
     @CurrentOrganization() userOrgId?: string,
     @Query('organizationId') queryOrgId?: string,
   ) {
-    // SUPER_ADMIN: ohne Filter alle Invites, mit Filter nur eine Org
-    if (user.role === UserRole.SUPER_ADMIN) {
+    // ADMINISTRATOR: ohne Filter alle Invites, mit Filter nur eine Org
+    if (user.role === UserRole.ADMINISTRATOR) {
       if (queryOrgId) {
         return this.invitesService.getInvitesByOrganization(queryOrgId);
       }
@@ -138,7 +139,7 @@ export class OrganizationsController {
       return this.invitesService.getAllInvites();
     }
 
-    // Normale Admins verwenden ihre eigene Organization
+    // Normale Benutzer verwenden ihre eigene Organization
     if (!userOrgId) {
       throw new BadRequestException('You must belong to an organization to view invites');
     }
@@ -151,7 +152,7 @@ export class OrganizationsController {
    * Löscht einen Invite
    */
   @Delete('invites/:inviteId')
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ADMINISTRATOR)
   deleteInvite(
     @Param('inviteId') inviteId: string,
     @CurrentUser() user: AuthUser,
@@ -165,20 +166,20 @@ export class OrganizationsController {
   // ============================================
 
   @Get(':id')
-  @Roles(UserRole.SUPER_ADMIN, UserRole.ADMIN)
+  @Roles(UserRole.ADMINISTRATOR)
   findOne(
     @Param('id') id: string,
     @CurrentUser() user: AuthUser,
     @CurrentOrganization() userOrgId?: string,
   ) {
-    if (user.role !== UserRole.SUPER_ADMIN && id !== userOrgId) {
+    if (user.role !== UserRole.ADMINISTRATOR && id !== userOrgId) {
       throw new ForbiddenException('You can only view your own organization');
     }
     return this.organizationsService.findOne(id);
   }
 
   @Patch(':id')
-  @Roles(UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ADMINISTRATOR)
   update(
     @Param('id') id: string,
     @Body() updateOrganizationDto: UpdateOrganizationDto,
@@ -187,7 +188,7 @@ export class OrganizationsController {
   }
 
   @Delete(':id')
-  @Roles(UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ADMINISTRATOR)
   remove(@Param('id') id: string) {
     return this.organizationsService.remove(id);
   }

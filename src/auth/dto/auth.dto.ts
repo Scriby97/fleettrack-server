@@ -27,10 +27,6 @@ export class SignUpDto {
   lastName?: string;
 
   @IsOptional()
-  @IsUUID()
-  organizationId?: string;
-
-  @IsOptional()
   metadata?: any;
 }
 

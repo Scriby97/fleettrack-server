@@ -4,31 +4,60 @@ import {
   ExecutionContext,
   ForbiddenException,
 } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { UserRole } from '../enums/user-role.enum';
+import { OrganizationMemberEntity } from '../../organizations/organization-member.entity';
 
 /**
- * Guard zur Sicherstellung, dass User nur auf Daten ihrer eigenen Organisation zugreifen
+ * Guard to ensure users only access organizations they belong to
+ * Admins have access to all organizations
  */
 @Injectable()
 export class OrganizationGuard implements CanActivate {
-  canActivate(context: ExecutionContext): boolean {
+  constructor(
+    @InjectRepository(OrganizationMemberEntity)
+    private readonly memberRepo: Repository<OrganizationMemberEntity>,
+  ) {}
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
     const user = request.user;
+    const organizationId = request.params.organizationId || request.body?.organizationId;
 
     if (!user) {
       throw new ForbiddenException('User not authenticated');
     }
 
-    // Super-Admins haben Zugriff auf alle Organisationen
-    if (user.role === UserRole.SUPER_ADMIN) {
+    // Administrators have access to all organizations
+    if (user.role === UserRole.ADMINISTRATOR) {
       return true;
     }
 
-    // Normale User und Admins müssen einer Organisation angehören
-    if (!user.organizationId) {
-      throw new ForbiddenException('User has no organization assigned');
+    // Normal users need to be members of the organization
+    if (user.role === UserRole.USER) {
+      if (!organizationId) {
+        throw new ForbiddenException('Organization ID is required');
+      }
+
+      const membership = await this.memberRepo.findOne({
+        where: {
+          userId: user.id,
+          organizationId,
+        },
+      });
+
+      if (!membership) {
+        throw new ForbiddenException(
+          'User is not a member of this organization',
+        );
+      }
+
+      // Store membership in request for later use
+      request.organizationMembership = membership;
+      return true;
     }
 
-    return true;
+    throw new ForbiddenException('Invalid user role');
   }
 }

@@ -6,35 +6,35 @@ import {
   UpdateDateColumn,
   OneToMany,
 } from 'typeorm';
-import { UserProfileEntity } from '../auth/entities/user-profile.entity';
+import { OrganizationMemberEntity } from './organization-member.entity';
 import { VehicleEntity } from '../vehicles/vehicle.entity';
 
 @Entity('organizations')
 export class OrganizationEntity {
   @PrimaryGeneratedColumn('uuid')
-  id: string;
+  id!: string;
 
   @Column({ unique: true })
-  name: string;
+  name!: string;
 
   @Column({ nullable: true, unique: true })
   subdomain?: string; // z.B. "firma1" für firma1.fleettrack.com
 
   @Column({ default: true })
-  isActive: boolean;
+  isActive!: boolean;
 
   @Column({ nullable: true })
   contactEmail?: string;
 
-  @OneToMany(() => UserProfileEntity, (user) => user.organization)
-  users: UserProfileEntity[];
+  @OneToMany(() => OrganizationMemberEntity, (member) => member.organization)
+  members!: OrganizationMemberEntity[];
 
   @OneToMany(() => VehicleEntity, (vehicle) => vehicle.organization)
-  vehicles: VehicleEntity[];
+  vehicles!: VehicleEntity[];
 
   @CreateDateColumn()
-  createdAt: Date;
+  createdAt!: Date;
 
   @UpdateDateColumn()
-  updatedAt: Date;
+  updatedAt!: Date;
 }

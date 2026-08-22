@@ -1,5 +1,10 @@
 export enum UserRole {
-  SUPER_ADMIN = 'super_admin', // Kann mehrere Organisationen verwalten
-  ADMIN = 'admin', // Admin innerhalb einer Organisation
-  USER = 'user', // Normaler User innerhalb einer Organisation
+  ADMINISTRATOR = 'administrator', // System-wide admin - can see all organizations
+  USER = 'user', // Normal user - access controlled by organization_members table
+}
+
+export enum OrganizationRole {
+  EMPLOYEE = 'employee', // Read-only access to organization
+  ADMIN = 'admin', // Can manage organization (except delete)
+  OWNER = 'owner', // Full access (can delete organization)
 }

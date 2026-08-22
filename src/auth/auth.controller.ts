@@ -45,7 +45,6 @@ export class AuthController {
         ...dto.metadata,
       },
       UserRole.USER, // Standard-Rolle
-      dto.organizationId, // Organization ID aus DTO
     );
   }
 
@@ -102,24 +101,19 @@ export class AuthController {
 
   /**
    * GET /auth/users
-   * Alle User abrufen (nur für Admins)
-   * Super-Admins sehen alle, normale Admins nur ihre Organisation
+   * Alle User abrufen (nur für Administratoren)
    */
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ADMINISTRATOR)
   @Get('users')
-  getAllUsers(
-    @CurrentUser() user: AuthUser,
-    @CurrentOrganization() organizationId?: string,
-  ) {
-    const filterOrgId = user.role === UserRole.SUPER_ADMIN ? undefined : organizationId;
-    return this.authService.getAllUsers(filterOrgId);
+  getAllUsers() {
+    return this.authService.getAllUsers();
   }
 
   /**
    * PATCH /auth/users/:userId/role
-   * User-Rolle ändern (nur für Admins)
+   * User-Rolle ändern (nur für Administratoren)
    */
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ADMINISTRATOR)
   @Patch('users/:userId/role')
   updateUserRole(
     @Param('userId') userId: string,
@@ -132,17 +126,15 @@ export class AuthController {
    * POST /auth/users/:userId/reset-password
    * Admin: Passwort-Reset Email an User senden
    */
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.ADMINISTRATOR)
   @Post('users/:userId/reset-password')
   adminResetPassword(
     @Param('userId') userId: string,
     @CurrentUser() user: AuthUser,
-    @CurrentOrganization() organizationId?: string,
   ) {
     return this.authService.adminResetPasswordByUserId(
       userId,
       user.role,
-      organizationId,
     );
   }
 }

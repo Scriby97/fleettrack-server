@@ -1,5 +1,5 @@
 import { IsString, IsEmail, IsOptional, MinLength, IsEnum } from 'class-validator';
-import { UserRole } from '../../auth/enums/user-role.enum';
+import { OrganizationRole } from '../../auth/enums/user-role.enum';
 
 export class CreateOrganizationDto {
   @IsString()
@@ -26,7 +26,7 @@ export class CreateOrganizationDto {
   @IsOptional()
   adminLastName?: string;
 
-  @IsEnum(UserRole)
+  @IsEnum(OrganizationRole)
   @IsOptional()
-  adminRole?: UserRole; // Default: admin, kann auch super_admin sein
+  adminRole?: OrganizationRole; // Default: admin (OrganizationRole.ADMIN)
 }

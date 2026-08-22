@@ -4,28 +4,26 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
-  ManyToOne,
-  JoinColumn,
+  OneToMany,
 } from 'typeorm';
-import { OrganizationEntity } from '../../organizations/organization.entity';
+import { OrganizationMemberEntity } from '../../organizations/organization-member.entity';
 
 @Entity('user_profiles')
 export class UserProfileEntity {
   @PrimaryColumn('uuid')
-  id: string; // Gleiche ID wie Supabase Auth User
+  id!: string; // Gleiche ID wie Supabase Auth User
 
   @Column({ unique: true })
-  email: string;
+  email!: string;
 
   @Column({ default: 'user' })
-  role: string; // 'super_admin', 'admin' oder 'user'
+  role!: string; // 'user' oder 'administrator'
 
-  @Column({ type: 'uuid', nullable: true })
-  organizationId?: string;
-
-  @ManyToOne(() => OrganizationEntity, (org) => org.users, { nullable: true })
-  @JoinColumn({ name: 'organizationId' })
-  organization?: OrganizationEntity;
+  @OneToMany(
+    () => OrganizationMemberEntity,
+    (membership) => membership.user,
+  )
+  organizationMemberships!: OrganizationMemberEntity[];
 
   @Column({ nullable: true })
   firstName?: string;
@@ -34,8 +32,8 @@ export class UserProfileEntity {
   lastName?: string;
 
   @CreateDateColumn()
-  createdAt: Date;
+  createdAt!: Date;
 
   @UpdateDateColumn()
-  updatedAt: Date;
+  updatedAt!: Date;
 }

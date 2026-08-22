@@ -10,8 +10,9 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { OrganizationInviteEntity } from './entities/organization-invite.entity';
 import { OrganizationEntity } from './organization.entity';
+import { OrganizationMemberEntity } from './organization-member.entity';
 import { CreateInviteDto } from './dto/create-invite.dto';
-import { UserRole } from '../auth/enums/user-role.enum';
+import { UserRole, OrganizationRole } from '../auth/enums/user-role.enum';
 import { randomBytes } from 'crypto';
 
 @Injectable()
@@ -23,10 +24,13 @@ export class OrganizationsInvitesService {
     private readonly inviteRepository: Repository<OrganizationInviteEntity>,
     @InjectRepository(OrganizationEntity)
     private readonly organizationRepository: Repository<OrganizationEntity>,
+    @InjectRepository(OrganizationMemberEntity)
+    private readonly memberRepository: Repository<OrganizationMemberEntity>,
   ) {}
 
   /**
    * Erstellt einen neuen Invite-Link für eine Organisation
+   * Die role ist die OrganizationRole (employee/admin/owner) - nicht die UserRole
    */
   async createInvite(
     organizationId: string,
@@ -76,7 +80,7 @@ export class OrganizationsInvitesService {
       token,
       organizationId,
       email: createInviteDto.email,
-      role: createInviteDto.role || UserRole.USER,
+      role: createInviteDto.role || OrganizationRole.EMPLOYEE,
       invitedBy,
       expiresAt,
     });
@@ -144,6 +148,43 @@ export class OrganizationsInvitesService {
   }
 
   /**
+   * Erstellt eine Organization-Membership für einen User
+   * Wird nach erfolgreichem Accept eines Invites aufgerufen
+   */
+  async createMembership(
+    userId: string,
+    organizationId: string,
+    role: string = OrganizationRole.EMPLOYEE,
+  ): Promise<OrganizationMemberEntity> {
+    this.logger.log(
+      `createMembership userId=${userId} organizationId=${organizationId} role=${role}`,
+    );
+
+    // Prüfe ob Membership bereits existiert
+    const existingMembership = await this.memberRepository.findOne({
+      where: { userId, organizationId },
+    });
+
+    if (existingMembership) {
+      this.logger.warn(
+        `Membership already exists for userId=${userId} organizationId=${organizationId}`,
+      );
+      return existingMembership;
+    }
+
+    const membership = this.memberRepository.create({
+      userId,
+      organizationId,
+      role,
+    });
+
+    const saved = await this.memberRepository.save(membership);
+    this.logger.log(`Membership created: id=${saved.id}`);
+
+    return saved;
+  }
+
+  /**
    * Holt alle Invites einer Organisation
    */
   async getInvitesByOrganization(
@@ -167,9 +208,14 @@ export class OrganizationsInvitesService {
 
   /**
    * Löscht einen Invite
-   * Regular admins can only delete invites from their own organization
+   * Administrators can delete any invite
+   * Organization admins can only delete invites from their own organization
    */
-  async deleteInvite(inviteId: string, userRole?: string, organizationId?: string): Promise<void> {
+  async deleteInvite(
+    inviteId: string,
+    userRole?: string,
+    organizationId?: string,
+  ): Promise<void> {
     const invite = await this.inviteRepository.findOne({
       where: { id: inviteId },
     });
@@ -178,8 +224,13 @@ export class OrganizationsInvitesService {
       throw new NotFoundException('Invite not found');
     }
 
-    if (userRole !== UserRole.SUPER_ADMIN && invite.organizationId !== organizationId) {
-      throw new ForbiddenException('You can only delete invites from your organization');
+    if (
+      userRole !== UserRole.ADMINISTRATOR &&
+      invite.organizationId !== organizationId
+    ) {
+      throw new ForbiddenException(
+        'You can only delete invites from your organization',
+      );
     }
 
     await this.inviteRepository.remove(invite);
