@@ -7,6 +7,7 @@ import { VehicleEntity } from './vehicles/vehicle.entity';
 import { UsageEntity } from './usages/usage.entity';
 import { UserProfileEntity } from './auth/entities/user-profile.entity';
 import { OrganizationEntity } from './organizations/organization.entity';
+import { OrganizationMemberEntity } from './organizations/organization-member.entity';
 import { OrganizationInviteEntity } from './organizations/entities/organization-invite.entity';
 import { UsagesService } from './usages/usages.service';
 import { VehiclesController } from './vehicles/vehicles.controller';
@@ -25,7 +26,14 @@ import { OrganizationsModule } from './organizations/organizations.module';
     TypeOrmModule.forRoot({
       type: 'postgres',
       url: process.env.DATABASE_URL,
-      entities: [VehicleEntity, UsageEntity, UserProfileEntity, OrganizationEntity, OrganizationInviteEntity],
+      entities: [
+        VehicleEntity,
+        UsageEntity,
+        UserProfileEntity,
+        OrganizationEntity,
+        OrganizationMemberEntity,
+        OrganizationInviteEntity,
+      ],
       synchronize: false, // Temporär deaktiviert - wir machen Migrations manuell
       ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
       extra: {
