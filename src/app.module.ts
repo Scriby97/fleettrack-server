@@ -17,6 +17,7 @@ import { VehiclesService } from './vehicles/vehicles.service';
 import { SupabaseModule } from './supabase/supabase.module';
 import { AuthModule } from './auth/auth.module';
 import { OrganizationsModule } from './organizations/organizations.module';
+import { BillingModule } from './billing/billing.module';
 
 @Module({
   imports: [
@@ -37,27 +38,28 @@ import { OrganizationsModule } from './organizations/organizations.module';
         OrganizationInviteEntity,
       ],
       synchronize: false, // Temporär deaktiviert - wir machen Migrations manuell
-      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+      ssl:
+        process.env.NODE_ENV === 'production'
+          ? { rejectUnauthorized: false }
+          : false,
       extra: {
         // Force IPv4 to avoid IPv6 connection issues on some hosts
         connectionString: process.env.DATABASE_URL,
-        ssl: process.env.NODE_ENV === 'production' ? {
-          rejectUnauthorized: false,
-        } : false,
+        ssl:
+          process.env.NODE_ENV === 'production'
+            ? {
+                rejectUnauthorized: false,
+              }
+            : false,
       },
     }),
-     TypeOrmModule.forFeature([VehicleEntity, UsageEntity]),
-     SupabaseModule,
-     AuthModule,
-     OrganizationsModule,
+    TypeOrmModule.forFeature([VehicleEntity, UsageEntity]),
+    SupabaseModule,
+    AuthModule,
+    OrganizationsModule,
+    BillingModule,
   ],
-  controllers: [AppController,
-    VehiclesController,
-    UsagesController
-  ],
-  providers: [AppService,
-    VehiclesService,
-    UsagesService
-  ],
+  controllers: [AppController, VehiclesController, UsagesController],
+  providers: [AppService, VehiclesService, UsagesService],
 })
 export class AppModule {}

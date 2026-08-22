@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { OrganizationsService } from './organizations.service';
 import { OrganizationsInvitesService } from './organizations-invites.service';
+import { OrganizationMembersService } from './organization-members.service';
+import { OrganizationSubscriptionsService } from './organization-subscriptions.service';
 import { OrganizationsController } from './organizations.controller';
 import { InvitesController } from './invites.controller';
 import { OrganizationEntity } from './organization.entity';
@@ -10,6 +12,9 @@ import { OrganizationSubscriptionEntity } from './organization-subscription.enti
 import { OrganizationInviteEntity } from './entities/organization-invite.entity';
 import { UserProfileEntity } from '../auth/entities/user-profile.entity';
 import { AuthModule } from '../auth/auth.module';
+import { OrganizationGuard } from '../auth/guards/organization.guard';
+import { OrganizationRolesGuard } from '../auth/guards/organization-roles.guard';
+import { BillingModule } from '../billing/billing.module';
 
 @Module({
   imports: [
@@ -21,9 +26,22 @@ import { AuthModule } from '../auth/auth.module';
       UserProfileEntity,
     ]),
     AuthModule,
+    BillingModule,
   ],
   controllers: [OrganizationsController, InvitesController],
-  providers: [OrganizationsService, OrganizationsInvitesService],
-  exports: [OrganizationsService, OrganizationsInvitesService],
+  providers: [
+    OrganizationsService,
+    OrganizationsInvitesService,
+    OrganizationMembersService,
+    OrganizationSubscriptionsService,
+    OrganizationGuard,
+    OrganizationRolesGuard,
+  ],
+  exports: [
+    OrganizationsService,
+    OrganizationsInvitesService,
+    OrganizationMembersService,
+    OrganizationSubscriptionsService,
+  ],
 })
 export class OrganizationsModule {}

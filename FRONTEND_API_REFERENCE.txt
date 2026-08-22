@@ -1,0 +1,209 @@
+FleetTrack Server - API Referenz fuers Frontend
+=================================================
+Stand: 2026-08-22 (Branch feature/subscription)
+
+Alle Endpunkte liegen hinter dem globalen Prefix "/api" (siehe main.ts),
+z.B. POST /api/auth/signin. Ausnahme: GET / (Root-Health-Check).
+
+Auth: Bearer Token im Authorization-Header ("Authorization: Bearer <token>"),
+ausser bei Endpunkten die als PUBLIC markiert sind.
+
+
+1. ENTITIES
+=================================================
+
+UserProfileEntity (Tabelle: user_profiles)
+-------------------------------------------------
+id: string (UUID, = Supabase Auth User ID)
+email: string
+role: 'user' | 'administrator'          -- globale/funktionale Rolle
+firstName?: string
+lastName?: string
+organizationMemberships: OrganizationMemberEntity[]
+createdAt: Date
+updatedAt: Date
+
+OrganizationEntity (Tabelle: organizations)
+-------------------------------------------------
+id: string (UUID)
+name: string
+subdomain?: string
+isActive: boolean
+contactEmail?: string
+members: OrganizationMemberEntity[]
+vehicles: VehicleEntity[]
+subscription?: OrganizationSubscriptionEntity
+createdAt: Date
+updatedAt: Date
+
+OrganizationMemberEntity (Tabelle: organization_members)
+-------------------------------------------------
+id: string (UUID)
+userId: string (UUID)
+user: UserProfileEntity                  -- nur geladen wenn relations angefordert
+organizationId: string (UUID)
+organization: OrganizationEntity         -- nur geladen wenn relations angefordert
+role: 'employee' | 'admin' | 'owner'     -- Organisation-spezifische Rolle
+joinedAt: Date
+-- Rollen-Hierarchie: owner > admin > employee
+--   employee: nur Lesezugriff
+--   admin:    kann Organisation verwalten (Fahrzeuge, Mitglieder)
+--   owner:    Vollzugriff inkl. Loeschen der Organisation + Subscription verwalten
+
+OrganizationSubscriptionEntity (Tabelle: organization_subscriptions)
+-------------------------------------------------
+id: string (UUID)
+organizationId: string (UUID)            -- 1:1, unique
+tier: 'lieutenant' | 'captain' | 'general'
+status: 'active' | 'past_due' | 'canceled'
+currentPeriodStart?: Date
+currentPeriodEnd?: Date
+canceledAt?: Date
+stripeCustomerId?: string
+stripeSubscriptionId?: string
+createdAt: Date
+updatedAt: Date
+
+Subscription-Tiers (SUBSCRIPTION_LIMITS, src/organizations/constants/subscription-limits.constant.ts):
+  lieutenant : Free        | maxVehicles: 2    | maxMembers: 5    | priceChf: 0
+  captain    : CHF 99.-/Mt | maxVehicles: 20   | maxMembers: 50   | priceChf: 99
+  general    : CHF 199.-/Mt| maxVehicles: null | maxMembers: null | priceChf: 199
+  (null = unlimitiert. tier ist ein stabiler Key, KEIN Anzeigename -
+   Anzeigename/Uebersetzung macht das Frontend.)
+
+OrganizationInviteEntity (Tabelle: organization_invites)
+-------------------------------------------------
+id: string (UUID)
+token: string (unique)
+organizationId: string (UUID)
+organization: OrganizationEntity
+email: string
+role: string ('employee' | 'admin' | 'owner')  -- Rolle die der User bei Accept bekommt
+invitedBy?: string (UUID)
+expiresAt: Date
+usedAt?: Date
+usedBy?: string (UUID)
+createdAt: Date
+
+VehicleEntity (Tabelle: vehicles)
+-------------------------------------------------
+id: string (UUID)
+name: string
+plate: string (max 20 Zeichen)
+snowsatNumber: string
+isRetired: boolean
+location?: string
+vehicleType?: string
+fuelType?: string
+notes?: string
+organizationId: string (UUID)
+organization: OrganizationEntity
+
+UsageEntity (Tabelle: usages)
+-------------------------------------------------
+id: string (UUID)
+vehicleId: string (UUID)
+vehicle: VehicleEntity
+creatorId: string (UUID)
+creator: UserProfileEntity
+startOperatingHours: number (decimal, 1 Nachkommastelle)
+endOperatingHours: number (decimal, 1 Nachkommastelle)
+fuelLitersRefilled: number (integer, default 0)
+creationDate: number (Unix-Timestamp ms)
+usageDate: Date
+
+
+2. ENDPUNKTE
+=================================================
+
+--- Auth (/auth) ---
+Global gelten SupabaseAuthGuard + RolesGuard (per @Public() ausnehmbar).
+
+POST   /auth/signin                          PUBLIC   Login (email, password)
+POST   /auth/signup                          PUBLIC   Registrierung (email, password, firstName?, lastName?) -> Rolle immer 'user'
+POST   /auth/refresh                         PUBLIC   Token erneuern (refresh_token)
+POST   /auth/signout                         AUTH     Logout
+POST   /auth/reset-password                  PUBLIC   Passwort-Reset-Mail (email)
+POST   /auth/update-password                 AUTH     Eigenes Passwort aendern (new_password)
+GET    /auth/me                              AUTH     Eigenes Profil inkl. organizationMemberships (ohne organization-Details, siehe /organizations/mine)
+GET    /auth/users                           ADMIN    Alle User
+PATCH  /auth/users/:userId/role              ADMIN    Globale Rolle aendern (role: 'user'|'administrator')
+POST   /auth/users/:userId/reset-password    ADMIN    Reset-Mail fuer anderen User anstossen
+
+--- Organizations (/organizations) ---
+Global gelten SupabaseAuthGuard + RolesGuard.
+
+POST   /organizations                                    ADMIN         Org anlegen (name, subdomain?, contactEmail?, adminEmail, adminFirstName?, adminLastName?, adminRole?)
+                                                                        -> legt automatisch eine Lieutenant-Subscription + Erst-Invite an
+GET    /organizations                                     ADMIN         Alle Organisationen
+
+POST   /organizations/invites                             ADMIN*        Invite erstellen (email, role?, organizationId? fuer Admins)
+GET    /organizations/invites                             ADMIN*        Invites (eigene Org, oder alle/gefiltert fuer Administrator via ?organizationId=)
+DELETE /organizations/invites/:inviteId                   ADMIN*        Invite loeschen
+
+GET    /organizations/mine                                AUTH          [NEU] Eigene Organisationen des Users inkl. Rolle + Org-Name
+                                                                        Response: OrganizationMemberEntity[] mit geladener `organization`-Relation
+                                                                        -> fuer Org-Switcher im Frontend
+
+GET    /organizations/:organizationId/members              AUTH+MEMBER   [NEU] Mitgliederliste einer Org inkl. User-Daten (jede Org-Rolle darf lesen)
+PATCH  /organizations/:organizationId/members/:memberId    ORG-ADMIN+    [NEU] Rolle eines Mitglieds aendern (Body: { role })
+                                                                        -> blockiert Entfernen/Herabstufen des letzten Owners
+DELETE /organizations/:organizationId/members/:memberId    ORG-ADMIN+    [NEU] Mitglied entfernen
+                                                                        -> blockiert Entfernen des letzten Owners
+
+GET    /organizations/:organizationId/subscription          AUTH+MEMBER   [NEU] Aktuelle Subscription + Plan-Limits (jede Org-Rolle darf lesen)
+                                                                        Response: OrganizationSubscriptionEntity + { limits: { maxVehicles, maxMembers, priceChf } }
+PATCH  /organizations/:organizationId/subscription           ORG-OWNER     [NEU] Subscription-Tier aendern (Body: { tier })
+                                                                        -> nur Org-Owner oder globaler Administrator (kein echtes Billing/Stripe angebunden,
+                                                                           setzt direkt tier + status=active)
+
+GET    /organizations/:id                                  ADMIN*        Org-Details (Admin oder eigene Org)
+PATCH  /organizations/:id                                  ADMIN         Org bearbeiten
+DELETE /organizations/:id                                  ADMIN         Soft-Delete (isActive=false)
+
+Legende Auth-Spalte:
+  ADMIN        -> nur globale Rolle 'administrator' (@Roles(UserRole.ADMINISTRATOR))
+  ADMIN*       -> @Roles(ADMINISTRATOR) am Endpoint, mit Sonderlogik im Body/Query fuer eigene Org
+  AUTH         -> jeder eingeloggte User
+  AUTH+MEMBER  -> jeder eingeloggte User der Mitglied der Ziel-Org ist (jede Org-Rolle), oder globaler Administrator
+  ORG-ADMIN+   -> Org-Rolle 'admin' oder 'owner' der Ziel-Org, oder globaler Administrator
+  ORG-OWNER    -> nur Org-Rolle 'owner' der Ziel-Org, oder globaler Administrator
+
+--- Invites (/invites) --- PUBLIC (kein Login noetig)
+
+GET    /invites/:token                       Invite-Info validieren (email, role, organization{id,name}, expiresAt)
+POST   /invites/accept                       Invite annehmen (token, email, password, firstName, lastName)
+                                              -> erstellt User + organization_members-Eintrag
+
+--- Vehicles (/vehicles) --- AUTH (Login erforderlich)
+
+GET    /vehicles                             Liste (Admin: alle oder ?organizationId=, sonst eigene Org)
+GET    /vehicles/stats                       Statistiken
+GET    /vehicles/:vehicleId/last-operating-hours   Letzter Betriebsstundenstand
+POST   /vehicles                             ADMIN   Anlegen (name, plate, snowsatNumber, location?, vehicleType?, fuelType?, notes?, organizationId?)
+PUT    /vehicles/:id                         ADMIN   Bearbeiten
+DELETE /vehicles/:id                         ADMIN   Loeschen/Ausmustern
+
+--- Usages (/usages) --- AUTH (Login erforderlich)
+
+GET    /usages/with-vehicles                 Nutzungen inkl. Fahrzeugdaten
+GET    /usages                               Liste
+POST   /usages                               Anlegen (vehicleId, startOperatingHours, endOperatingHours?, fuelLitersRefilled, usageDate?)
+PUT    /usages/:id                           Bearbeiten
+DELETE /usages/:id                           Loeschen
+
+--- App ---
+GET    /                                     PUBLIC   Health/Hello
+GET    /health                               PUBLIC   Health-Check
+
+
+3. BEKANNTE OFFENE PUNKTE (noch nicht umgesetzt)
+=================================================
+- Kein echtes Billing: PATCH /organizations/:organizationId/subscription setzt das Tier
+  direkt, ohne Zahlungsabwicklung (Stripe-Felder sind vorbereitet, aber nicht angebunden).
+- Kein serverseitiges Enforcement der Tier-Limits (maxVehicles/maxMembers) beim
+  Anlegen von Fahrzeugen/Einladungen - das Frontend/Backend muss das noch pruefen.
+- /vehicles und /usages nutzen @CurrentOrganization() ohne OrganizationGuard vor sich -
+  fuer normale User (kein Administrator) wird organizationId aktuell nur ueber
+  Route-Params ermittelt, die diese Controller gar nicht haben. Sollte ueberprueft werden,
+  falls normale User (nicht nur Administratoren) diese Endpunkte nutzen sollen.

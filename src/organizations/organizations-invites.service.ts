@@ -7,7 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { ILike, IsNull, MoreThan, Repository } from 'typeorm';
 import { OrganizationInviteEntity } from './entities/organization-invite.entity';
 import { OrganizationEntity } from './organization.entity';
 import { OrganizationMemberEntity } from './organization-member.entity';
@@ -133,7 +133,9 @@ export class OrganizationsInvitesService {
     token: string,
     userId: string,
   ): Promise<OrganizationInviteEntity> {
-    this.logger.debug(`markInviteAsUsed called with token=${token.substring(0, 20)}...`);
+    this.logger.debug(
+      `markInviteAsUsed called with token=${token.substring(0, 20)}...`,
+    );
 
     const invite = await this.validateInvite(token);
     this.logger.debug(`Invite before update: id=${invite.id}`);
@@ -142,7 +144,9 @@ export class OrganizationsInvitesService {
     invite.usedBy = userId;
 
     const saved = await this.inviteRepository.save(invite);
-    this.logger.debug(`Invite after save: id=${saved.id}, usedAt=${saved.usedAt}`);
+    this.logger.debug(
+      `Invite after save: id=${saved.id}, usedAt=${saved.usedAt}`,
+    );
 
     return saved;
   }
@@ -182,6 +186,58 @@ export class OrganizationsInvitesService {
     this.logger.log(`Membership created: id=${saved.id}`);
 
     return saved;
+  }
+
+  /**
+   * Holt alle offenen (nicht verwendeten, nicht abgelaufenen) Invites für eine Email
+   * Für "Meine Einladungen" im Frontend
+   */
+  async getInvitesByEmail(email: string): Promise<OrganizationInviteEntity[]> {
+    return await this.inviteRepository.find({
+      where: {
+        email: ILike(email),
+        usedAt: IsNull(),
+        expiresAt: MoreThan(new Date()),
+      },
+      relations: ['organization'],
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  /**
+   * Akzeptiert einen Invite für einen bereits eingeloggten, existierenden User
+   * (im Gegensatz zu POST /invites/accept, das immer einen neuen User registriert)
+   */
+  async acceptInviteForExistingUser(
+    token: string,
+    userId: string,
+    userEmail: string,
+  ): Promise<OrganizationMemberEntity> {
+    const invite = await this.validateInvite(token);
+
+    if (invite.email.toLowerCase() !== userEmail.toLowerCase()) {
+      throw new ForbiddenException(
+        'Diese Einladung ist nicht an deine Email-Adresse gerichtet',
+      );
+    }
+
+    await this.markInviteAsUsed(token, userId);
+    return this.createMembership(userId, invite.organizationId, invite.role);
+  }
+
+  /**
+   * Lehnt einen Invite ab (entfernt ihn), nur der eingeladene User selbst darf das
+   */
+  async declineInvite(token: string, userEmail: string): Promise<void> {
+    const invite = await this.validateInvite(token);
+
+    if (invite.email.toLowerCase() !== userEmail.toLowerCase()) {
+      throw new ForbiddenException(
+        'Diese Einladung ist nicht an deine Email-Adresse gerichtet',
+      );
+    }
+
+    await this.inviteRepository.remove(invite);
   }
 
   /**
