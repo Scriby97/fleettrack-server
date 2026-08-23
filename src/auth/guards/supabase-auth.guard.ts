@@ -79,15 +79,52 @@ export class SupabaseAuthGuard implements CanActivate {
 
       // Erstelle automatisch ein Profile, falls es nicht existiert
       if (!profile) {
-        this.logger.log(`Erstelle neues User-Profile für ${user.email}`);
-        profile = this.profileRepo.create({
-          id: user.id,
-          email: user.email!,
-          role: UserRole.USER, // Standard-Rolle
-          firstName: user.user_metadata?.firstName,
-          lastName: user.user_metadata?.lastName,
+        // Es könnte bereits ein Profil mit dieser Email existieren, aber unter
+        // einer anderen ID (z.B. verwaister Eintrag von einem gelöschten und
+        // neu erstellten Supabase Auth User). Da Supabase Emails pro Auth-User
+        // eindeutig hält, ist das eindeutig derselbe Account - repariere die ID
+        // statt an der Unique-Constraint auf email zu scheitern.
+        const existingByEmail = await this.profileRepo.findOne({
+          where: { email: user.email! },
         });
-        await this.profileRepo.save(profile);
+
+        if (existingByEmail) {
+          this.logger.warn(
+            `Verwaistes Profil für ${user.email} gefunden (alte ID: ${existingByEmail.id}, aktuelle Auth-ID: ${user.id}) - repariere ID`,
+          );
+          try {
+            await this.profileRepo.update(
+              { id: existingByEmail.id },
+              { id: user.id },
+            );
+            profile = await this.profileRepo.findOne({
+              where: { id: user.id },
+            });
+          } catch (repairError) {
+            const repairMessage =
+              repairError instanceof Error ? repairError.message : 'Unknown error';
+            this.logger.error(
+              `Konnte verwaistes Profil für ${user.email} nicht reparieren: ${repairMessage}`,
+            );
+            throw new UnauthorizedException(
+              'Für diese E-Mail-Adresse existiert bereits ein Profil mit abweichender ID. Bitte kontaktiere den Support.',
+            );
+          }
+        } else {
+          this.logger.log(`Erstelle neues User-Profile für ${user.email}`);
+          profile = this.profileRepo.create({
+            id: user.id,
+            email: user.email!,
+            role: UserRole.USER, // Standard-Rolle
+            firstName: user.user_metadata?.firstName,
+            lastName: user.user_metadata?.lastName,
+          });
+          await this.profileRepo.save(profile);
+        }
+      }
+
+      if (!profile) {
+        throw new UnauthorizedException('Benutzerprofil konnte nicht geladen werden');
       }
 
       // Füge User zu Request hinzu für späteren Zugriff
