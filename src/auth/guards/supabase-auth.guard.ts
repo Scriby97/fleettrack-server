@@ -24,6 +24,9 @@ export class SupabaseAuthGuard implements CanActivate {
     new URL(
       `${(process.env.SUPABASE_URL || '').trim()}/auth/v1/.well-known/jwks.json`,
     ),
+    // Generous timeout as a safety net in case the connection to Supabase is
+    // still slow (jose's default is 5s, too tight for that observed latency)
+    { timeoutDuration: 20_000 },
   );
 
   constructor(

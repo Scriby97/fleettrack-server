@@ -1,7 +1,15 @@
+import dns from 'node:dns';
 import { ValidationPipe, Logger, RequestMethod } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { getVersionInfo } from './version';
+
+// Some hosts (e.g. Render) resolve outbound hostnames to IPv6 addresses that
+// are unroutable/very slow from there, while IPv4 works fine. This affects
+// Node's global fetch (undici) - used by @supabase/supabase-js and jose for
+// calls to Supabase - not just the pg connection. Must run before any DNS
+// lookups happen, so it's the very first thing in the entrypoint.
+dns.setDefaultResultOrder('ipv4first');
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { rawBody: true });
