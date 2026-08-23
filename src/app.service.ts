@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectEntityManager } from '@nestjs/typeorm';
 import { EntityManager } from 'typeorm';
+import { getVersionInfo } from './version';
 
 @Injectable()
 export class AppService {
@@ -14,6 +15,8 @@ export class AppService {
   }
 
   async healthCheck() {
+    const versionInfo = getVersionInfo();
+
     try {
       // Test database connection
       await this.entityManager.query('SELECT 1');
@@ -22,6 +25,7 @@ export class AppService {
         timestamp: new Date().toISOString(),
         database: 'connected',
         environment: process.env.NODE_ENV || 'development',
+        ...versionInfo,
       };
     } catch (error) {
       return {
@@ -30,6 +34,7 @@ export class AppService {
         database: 'disconnected',
         error: error.message,
         environment: process.env.NODE_ENV || 'development',
+        ...versionInfo,
       };
     }
   }

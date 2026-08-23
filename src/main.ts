@@ -1,10 +1,14 @@
 import { ValidationPipe, Logger, RequestMethod } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+import { getVersionInfo } from './version';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { rawBody: true });
   const logger = new Logger('Bootstrap');
+
+  const { version, gitCommit, gitBranch } = getVersionInfo();
+  logger.log(`Version: ${version} | Commit: ${gitCommit} | Branch: ${gitBranch}`);
 
   app.setGlobalPrefix('api', {
     exclude: [{ path: '', method: RequestMethod.GET }],
