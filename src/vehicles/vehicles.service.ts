@@ -1,14 +1,8 @@
-import {
-  Injectable,
-  NotFoundException,
-  ForbiddenException,
-  Logger,
-} from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { VehicleEntity } from './vehicle.entity';
 import { UsageEntity } from '../usages/usage.entity';
-import { UserRole } from '../auth/enums/user-role.enum';
 
 export interface Vehicle {
   id: string;
@@ -170,60 +164,32 @@ export class VehiclesService {
 
   /**
    * Update a vehicle
-   * Super-Admins can update any vehicle
-   * Regular admins can only update vehicles in their organization
+   * Authorization is checked by the controller before calling this
    */
-  async update(
-    id: string,
-    data: Partial<Vehicle>,
-    userRole?: string,
-    organizationId?: string,
-  ): Promise<Vehicle> {
+  async update(id: string, data: Partial<Vehicle>): Promise<Vehicle> {
     const vehicle = await this.repo.findOne({ where: { id } });
 
     if (!vehicle) {
       throw new NotFoundException(`Vehicle with ID ${id} not found`);
     }
 
-    // Check authorization: Administrators can update all vehicles, users only their own organization
-    if (
-      userRole !== UserRole.ADMINISTRATOR &&
-      vehicle.organizationId !== organizationId
-    ) {
-      throw new ForbiddenException(
-        'You can only update vehicles in your organization',
-      );
-    }
-
-    // Update the vehicle
     Object.assign(vehicle, data);
     return this.repo.save(vehicle);
   }
 
   /**
    * Delete or retire a vehicle
+   * Authorization is checked by the controller before calling this
    * If the vehicle has usages, it will be marked as retired (isRetired = true)
    * If no usages exist, the vehicle will be permanently deleted
    */
   async delete(
     id: string,
-    userRole?: string,
-    organizationId?: string,
   ): Promise<{ deleted: boolean; retired: boolean; message: string }> {
     const vehicle = await this.repo.findOne({ where: { id } });
 
     if (!vehicle) {
       throw new NotFoundException(`Vehicle with ID ${id} not found`);
-    }
-
-    // Check authorization: Administrators can delete all vehicles, users only their own organization
-    if (
-      userRole !== UserRole.ADMINISTRATOR &&
-      vehicle.organizationId !== organizationId
-    ) {
-      throw new ForbiddenException(
-        'You can only delete vehicles in your organization',
-      );
     }
 
     // Check if vehicle has any usages

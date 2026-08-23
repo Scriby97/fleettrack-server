@@ -8,12 +8,9 @@ import {
   Delete,
   UseGuards,
   Query,
-  Logger,
-  Req,
   BadRequestException,
   ForbiddenException,
 } from '@nestjs/common';
-import type { Request } from 'express';
 import { OrganizationsService } from './organizations.service';
 import { OrganizationsInvitesService } from './organizations-invites.service';
 import { OrganizationMembersService } from './organization-members.service';
@@ -41,8 +38,6 @@ import { StripeService } from '../billing/stripe.service';
 @Controller('organizations')
 @UseGuards(SupabaseAuthGuard, RolesGuard)
 export class OrganizationsController {
-  private readonly logger = new Logger(OrganizationsController.name);
-
   constructor(
     private readonly organizationsService: OrganizationsService,
     private readonly invitesService: OrganizationsInvitesService,
@@ -113,6 +108,48 @@ export class OrganizationsController {
   // ============================================
 
   /**
+   * Ermittelt die Organisation, für die ein normaler User Invites verwalten darf
+   * (Admin oder Owner in genau dieser Organisation - Owner hat automatisch auch
+   * alle Admin-Rechte). Administratoren dürfen jede Organisation angeben.
+   */
+  private async resolveManageableOrganizationId(
+    user: AuthUser,
+    requestedOrgId?: string,
+  ): Promise<string> {
+    if (user.role === UserRole.ADMINISTRATOR) {
+      if (!requestedOrgId) {
+        throw new BadRequestException('Organization ID is required');
+      }
+      return requestedOrgId;
+    }
+
+    const managedOrgIds = await this.membersService.getManagedOrganizationIds(
+      user.id,
+    );
+
+    if (requestedOrgId) {
+      if (!managedOrgIds.includes(requestedOrgId)) {
+        throw new ForbiddenException(
+          'Du bist nicht Admin oder Owner dieser Organisation',
+        );
+      }
+      return requestedOrgId;
+    }
+
+    if (managedOrgIds.length === 1) {
+      return managedOrgIds[0];
+    }
+    if (managedOrgIds.length === 0) {
+      throw new ForbiddenException(
+        'Nur Organisations-Admins oder -Owner dürfen Einladungen verwalten',
+      );
+    }
+    throw new BadRequestException(
+      'Bitte organizationId angeben - du verwaltest mehrere Organisationen',
+    );
+  }
+
+  /**
    * POST /organizations/invites
    * Erstellt einen Invite-Link für die eigene Organization
    * Administratoren können für beliebige Orgs inviten,
@@ -120,41 +157,14 @@ export class OrganizationsController {
    * (mit ?organizationId=xxx oder organizationId im Body)
    */
   @Post('invites')
-  @Roles(UserRole.ADMINISTRATOR) // Nur Administratoren erlaubt, Org-Admins haben weitere Checks
-  createInvite(
-    @Req() req: Request,
+  async createInvite(
     @Body() createInviteDto: CreateInviteDto,
     @CurrentUser() user: AuthUser,
-    @CurrentOrganization() userOrgId?: string,
     @Query('organizationId') queryOrgId?: string,
   ) {
-    this.logger.log(
-      `createInvite raw frontend params query=${JSON.stringify(req.query)} body=${JSON.stringify(req.body)}`,
-    );
-    this.logger.log(
-      `createInvite validated dto email=${createInviteDto.email} role=${createInviteDto.role || 'none'} organizationId=${createInviteDto.organizationId || 'none'}`,
-    );
-    this.logger.log(
-      `createInvite called by user=${user.id} role=${user.role} queryOrgId=${queryOrgId || 'none'} bodyOrgId=${createInviteDto.organizationId || 'none'} userOrgId=${userOrgId || 'none'}`,
-    );
-
-    // ADMINISTRATOR kann organizationId per Query oder Body angeben
-    let targetOrgId: string;
-    const adminTargetOrgId = queryOrgId || createInviteDto.organizationId;
-    if (user.role === UserRole.ADMINISTRATOR && adminTargetOrgId) {
-      targetOrgId = adminTargetOrgId;
-    } else {
-      // Normale Benutzer verwenden ihre eigene Organization
-      if (!userOrgId) {
-        throw new BadRequestException(
-          'You must belong to an organization to create invites',
-        );
-      }
-      targetOrgId = userOrgId;
-    }
-
-    this.logger.log(
-      `createInvite resolved targetOrgId=${targetOrgId} email=${createInviteDto.email}`,
+    const targetOrgId = await this.resolveManageableOrganizationId(
+      user,
+      queryOrgId || createInviteDto.organizationId,
     );
 
     return this.invitesService.createInvite(
@@ -168,45 +178,48 @@ export class OrganizationsController {
    * GET /organizations/invites
    * Holt alle Invites der eigenen Organisation
    * Administratoren erhalten standardmäßig alle Invites oder mit ?organizationId=xxx nur eine Org
+   * Normale User sehen die Invites ihrer eigenen Organisation(en) (jede Org-Rolle)
    */
   @Get('invites')
-  @Roles(UserRole.ADMINISTRATOR)
-  getInvites(
+  async getInvites(
     @CurrentUser() user: AuthUser,
-    @CurrentOrganization() userOrgId?: string,
     @Query('organizationId') queryOrgId?: string,
   ) {
-    // ADMINISTRATOR: ohne Filter alle Invites, mit Filter nur eine Org
     if (user.role === UserRole.ADMINISTRATOR) {
       if (queryOrgId) {
         return this.invitesService.getInvitesByOrganization(queryOrgId);
       }
-
       return this.invitesService.getAllInvites();
     }
 
-    // Normale Benutzer verwenden ihre eigene Organization
-    if (!userOrgId) {
-      throw new BadRequestException(
-        'You must belong to an organization to view invites',
-      );
+    const organizationIds = await this.membersService.getOrganizationIds(
+      user.id,
+    );
+    const targetOrgId = queryOrgId || organizationIds[0];
+
+    if (!targetOrgId || !organizationIds.includes(targetOrgId)) {
+      throw new ForbiddenException('Du bist kein Mitglied dieser Organisation');
     }
 
-    return this.invitesService.getInvitesByOrganization(userOrgId);
+    return this.invitesService.getInvitesByOrganization(targetOrgId);
   }
 
   /**
    * DELETE /organizations/invites/:inviteId
    * Löscht einen Invite
+   * Administratoren beliebig, normale User nur als Admin/Owner ihrer eigenen Organisation(en)
    */
   @Delete('invites/:inviteId')
-  @Roles(UserRole.ADMINISTRATOR)
-  deleteInvite(
+  async deleteInvite(
     @Param('inviteId') inviteId: string,
     @CurrentUser() user: AuthUser,
-    @CurrentOrganization() userOrgId?: string,
   ) {
-    return this.invitesService.deleteInvite(inviteId, user.role, userOrgId);
+    const managedOrgIds =
+      user.role === UserRole.ADMINISTRATOR
+        ? undefined
+        : await this.membersService.getManagedOrganizationIds(user.id);
+
+    return this.invitesService.deleteInvite(inviteId, user.role, managedOrgIds);
   }
 
   // ============================================

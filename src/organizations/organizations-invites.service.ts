@@ -265,12 +265,12 @@ export class OrganizationsInvitesService {
   /**
    * Löscht einen Invite
    * Administrators can delete any invite
-   * Organization admins can only delete invites from their own organization
+   * Organization admins/owners can only delete invites from organizations they manage
    */
   async deleteInvite(
     inviteId: string,
     userRole?: string,
-    organizationId?: string,
+    managedOrganizationIds?: string[],
   ): Promise<void> {
     const invite = await this.inviteRepository.findOne({
       where: { id: inviteId },
@@ -282,7 +282,7 @@ export class OrganizationsInvitesService {
 
     if (
       userRole !== UserRole.ADMINISTRATOR &&
-      invite.organizationId !== organizationId
+      !(managedOrganizationIds ?? []).includes(invite.organizationId)
     ) {
       throw new ForbiddenException(
         'You can only delete invites from your organization',

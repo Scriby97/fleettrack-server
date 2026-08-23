@@ -4,7 +4,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { OrganizationMemberEntity } from './organization-member.entity';
 import { OrganizationRole } from '../auth/enums/user-role.enum';
 
@@ -65,6 +65,31 @@ export class OrganizationMembersService {
       select: ['organizationId'],
     });
     return memberships.map((membership) => membership.organizationId);
+  }
+
+  /**
+   * IDs aller Organisationen, in denen der User Admin oder Owner ist.
+   * Owner hat automatisch auch alle Admin-Rechte (Rollen-Hierarchie owner > admin > employee).
+   */
+  async getManagedOrganizationIds(userId: string): Promise<string[]> {
+    const memberships = await this.memberRepository.find({
+      where: {
+        userId,
+        role: In([OrganizationRole.ADMIN, OrganizationRole.OWNER]),
+      },
+      select: ['organizationId'],
+    });
+    return memberships.map((membership) => membership.organizationId);
+  }
+
+  /**
+   * Die Mitgliedschaft eines Users in einer bestimmten Organisation (oder null)
+   */
+  async findMembership(
+    userId: string,
+    organizationId: string,
+  ): Promise<OrganizationMemberEntity | null> {
+    return this.memberRepository.findOne({ where: { userId, organizationId } });
   }
 
   async updateRole(

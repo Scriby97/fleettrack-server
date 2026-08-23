@@ -9,15 +9,15 @@ import {
   Query,
   BadRequestException,
   ForbiddenException,
+  NotFoundException,
 } from '@nestjs/common';
 import { VehiclesService } from './vehicles.service';
+import { VehicleEntity } from './vehicle.entity';
 import { CreateVehicleDto } from './dto/create-vehicle.dto';
 import { UpdateVehicleDto } from './dto/update-vehicle.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthUser } from '../auth/decorators/current-user.decorator';
-import { CurrentOrganization } from '../auth/decorators/current-organization.decorator';
-import { Roles } from '../auth/decorators/roles.decorator';
-import { UserRole } from '../auth/enums/user-role.enum';
+import { UserRole, OrganizationRole } from '../auth/enums/user-role.enum';
 import { OrganizationMembersService } from '../organizations/organization-members.service';
 
 @Controller('vehicles')
@@ -99,52 +99,122 @@ export class VehiclesController {
   }
 
   /**
-   * POST /vehicles
-   * Neues Fahrzeug erstellen (nur für Administratoren)
+   * Ermittelt die Organisation, für die ein normaler User Fahrzeuge verwalten darf
+   * (Admin oder Owner in genau dieser Organisation). Administratoren dürfen jede
+   * Organisation angeben.
    */
-  @Roles(UserRole.ADMINISTRATOR)
-  @Post()
-  create(
-    @Body() dto: CreateVehicleDto,
-    @CurrentUser() user: AuthUser,
-    @CurrentOrganization() organizationId?: string,
-  ) {
-    // Verwende die Organization des Users, außer Administrator gibt explizit eine an
-    const orgId = dto.organizationId || organizationId;
-    if (!orgId) {
-      throw new BadRequestException('Organization ID is required');
+  private async resolveManagedOrganizationId(
+    user: AuthUser,
+    requestedOrgId?: string,
+  ): Promise<string> {
+    if (user.role === UserRole.ADMINISTRATOR) {
+      if (!requestedOrgId) {
+        throw new BadRequestException('Organization ID is required');
+      }
+      return requestedOrgId;
     }
+
+    const managedOrgIds = await this.membersService.getManagedOrganizationIds(
+      user.id,
+    );
+
+    if (requestedOrgId) {
+      if (!managedOrgIds.includes(requestedOrgId)) {
+        throw new ForbiddenException(
+          'Du bist nicht Admin oder Owner dieser Organisation',
+        );
+      }
+      return requestedOrgId;
+    }
+
+    if (managedOrgIds.length === 1) {
+      return managedOrgIds[0];
+    }
+    if (managedOrgIds.length === 0) {
+      throw new ForbiddenException(
+        'Nur Organisations-Admins oder -Owner dürfen Fahrzeuge verwalten',
+      );
+    }
+    throw new BadRequestException(
+      'Bitte organizationId angeben - du verwaltest mehrere Organisationen',
+    );
+  }
+
+  /**
+   * Stellt sicher, dass der User ein bestehendes Fahrzeug bearbeiten/löschen darf:
+   * Administratoren immer, normale User nur als Admin/Owner der Fahrzeug-Organisation.
+   */
+  private async assertCanManageVehicle(
+    user: AuthUser,
+    vehicle: VehicleEntity,
+  ): Promise<void> {
+    if (user.role === UserRole.ADMINISTRATOR) {
+      return;
+    }
+
+    const membership = await this.membersService.findMembership(
+      user.id,
+      vehicle.organizationId,
+    );
+
+    if (
+      !membership ||
+      (membership.role !== OrganizationRole.ADMIN &&
+        membership.role !== OrganizationRole.OWNER)
+    ) {
+      throw new ForbiddenException(
+        'Nur Organisations-Admins oder -Owner dürfen Fahrzeuge verwalten',
+      );
+    }
+  }
+
+  /**
+   * POST /vehicles
+   * Neues Fahrzeug erstellen
+   * Administratoren für jede Organisation, Org-Admins/Owner nur für ihre eigene
+   */
+  @Post()
+  async create(@Body() dto: CreateVehicleDto, @CurrentUser() user: AuthUser) {
+    const orgId = await this.resolveManagedOrganizationId(
+      user,
+      dto.organizationId,
+    );
     return this.vehiclesService.create({ ...dto, organizationId: orgId });
   }
 
   /**
    * PUT /vehicles/:id
-   * Fahrzeug bearbeiten (nur für Administratoren)
+   * Fahrzeug bearbeiten
+   * Administratoren für jedes Fahrzeug, Org-Admins/Owner nur für Fahrzeuge ihrer eigenen Organisation
    */
-  @Roles(UserRole.ADMINISTRATOR)
   @Put(':id')
-  update(
+  async update(
     @Param('id') id: string,
     @Body() dto: UpdateVehicleDto,
     @CurrentUser() user: AuthUser,
-    @CurrentOrganization() organizationId?: string,
   ) {
-    return this.vehiclesService.update(id, dto, user.role, organizationId);
+    const vehicle = await this.vehiclesService.findOne(id);
+    if (!vehicle) {
+      throw new NotFoundException(`Vehicle with ID ${id} not found`);
+    }
+    await this.assertCanManageVehicle(user, vehicle);
+    return this.vehiclesService.update(id, dto);
   }
 
   /**
    * DELETE /vehicles/:id
-   * Fahrzeug löschen (nur für Administratoren)
+   * Fahrzeug löschen
+   * Administratoren für jedes Fahrzeug, Org-Admins/Owner nur für Fahrzeuge ihrer eigenen Organisation
    * Fahrzeuge mit Nutzungen werden als ausgemustert markiert,
    * Fahrzeuge ohne Nutzungen werden permanent gelöscht
    */
-  @Roles(UserRole.ADMINISTRATOR)
   @Delete(':id')
-  delete(
-    @Param('id') id: string,
-    @CurrentUser() user: AuthUser,
-    @CurrentOrganization() organizationId?: string,
-  ) {
-    return this.vehiclesService.delete(id, user.role, organizationId);
+  async delete(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    const vehicle = await this.vehiclesService.findOne(id);
+    if (!vehicle) {
+      throw new NotFoundException(`Vehicle with ID ${id} not found`);
+    }
+    await this.assertCanManageVehicle(user, vehicle);
+    return this.vehiclesService.delete(id);
   }
 }
