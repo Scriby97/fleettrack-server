@@ -309,15 +309,89 @@ export class OrganizationsController {
    * PATCH /organizations/:organizationId/subscription
    * Subscription-Tier ändern
    * Nur Administratoren oder der Org-Owner
+   *
+   * WICHTIG: setzt tier/status NICHT mehr direkt in der DB - das hätte einem
+   * Owner erlaubt, sich per PATCH kostenlos auf Captain/General hochzustufen,
+   * ganz ohne Stripe/Zahlung. Stattdessen:
+   * - Lieutenant -> Captain/General: liefert eine neue Stripe Checkout Session
+   * - Captain <-> General: wechselt die bestehende Stripe Subscription direkt
+   *   (mit Proration), DB wird danach synchron gehalten
+   * - * -> Lieutenant: kündigt die Stripe Subscription zum Periodenende; der
+   *   eigentliche Downgrade in der DB passiert erst über das
+   *   customer.subscription.deleted Webhook
    */
   @Patch(':organizationId/subscription')
   @UseGuards(OrganizationGuard, OrganizationRolesGuard)
   @OrganizationRoles(OrganizationRole.OWNER)
-  updateOrganizationSubscription(
+  async updateOrganizationSubscription(
     @Param('organizationId') organizationId: string,
     @Body() dto: UpdateSubscriptionDto,
+    @CurrentUser() user: AuthUser,
   ) {
+    const current =
+      await this.subscriptionsService.findByOrganization(organizationId);
+
+    if (dto.tier === current.tier) {
+      return current;
+    }
+
+    // Kündigung / Downgrade auf Free
+    if (dto.tier === SubscriptionTier.LIEUTENANT) {
+      if (current.stripeSubscriptionId) {
+        await this.stripeService.cancelSubscription(
+          current.stripeSubscriptionId,
+        );
+      }
+      return current; // Tier bleibt bis zum Periodenende aktiv, siehe Webhook
+    }
+
+    // Upgrade von Free: es existiert noch kein Stripe-Customer/-Subscription
+    if (current.tier === SubscriptionTier.LIEUTENANT) {
+      const checkoutUrl = await this.stripeService.createCheckoutSession({
+        organizationId,
+        tier: dto.tier,
+        customerEmail: user.email,
+      });
+      return { ...current, checkoutUrl };
+    }
+
+    // Wechsel zwischen bezahlten Tiers (Captain <-> General): direkt auf der
+    // bestehenden Stripe Subscription umstellen, inkl. Proration.
+    if (!current.stripeSubscriptionId) {
+      throw new BadRequestException(
+        'Keine aktive Stripe Subscription für diese Organisation gefunden',
+      );
+    }
+    await this.stripeService.changeSubscriptionTier({
+      stripeSubscriptionId: current.stripeSubscriptionId,
+      newTier: dto.tier,
+    });
     return this.subscriptionsService.updateTier(organizationId, dto.tier);
+  }
+
+  /**
+   * POST /organizations/:organizationId/billing-portal
+   * Erstellt eine Stripe Customer Portal Session (Rechnungen/Invoicing,
+   * Zahlungsmethode, Kündigung) - Self-Service ohne Support-Ticket.
+   * Nur Administratoren oder der Org-Owner.
+   */
+  @Post(':organizationId/billing-portal')
+  @UseGuards(OrganizationGuard, OrganizationRolesGuard)
+  @OrganizationRoles(OrganizationRole.OWNER)
+  async createBillingPortalSession(
+    @Param('organizationId') organizationId: string,
+  ) {
+    const subscription =
+      await this.subscriptionsService.findByOrganization(organizationId);
+    if (!subscription.stripeCustomerId) {
+      throw new BadRequestException(
+        'Diese Organisation hat noch keinen Stripe-Customer (Lieutenant/Free Tier)',
+      );
+    }
+    const url = await this.stripeService.createPortalSession({
+      stripeCustomerId: subscription.stripeCustomerId,
+    });
+    return { url };
   }
 
   // ============================================
