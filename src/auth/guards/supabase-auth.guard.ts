@@ -8,7 +8,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { SupabaseService } from '../../supabase/supabase.service';
+import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 import { UserProfileEntity } from '../entities/user-profile.entity';
 import { UserRole } from '../enums/user-role.enum';
@@ -16,9 +16,17 @@ import { UserRole } from '../enums/user-role.enum';
 @Injectable()
 export class SupabaseAuthGuard implements CanActivate {
   private readonly logger = new Logger(SupabaseAuthGuard.name);
+  // Verifies Supabase access tokens locally (JWKS is fetched once and cached
+  // by `jose`) instead of calling Supabase's /auth/v1/user endpoint on every
+  // request - that remote call was observed taking 30+ seconds under load,
+  // blowing past the frontend's fetch timeout on every single request.
+  private readonly jwks = createRemoteJWKSet(
+    new URL(
+      `${(process.env.SUPABASE_URL || '').trim()}/auth/v1/.well-known/jwks.json`,
+    ),
+  );
 
   constructor(
-    private supabaseService: SupabaseService,
     private reflector: Reflector,
     @InjectRepository(UserProfileEntity)
     private profileRepo: Repository<UserProfileEntity>,
@@ -50,31 +58,43 @@ export class SupabaseAuthGuard implements CanActivate {
     this.logger.debug(`Token (erste 20 Zeichen): ${token.substring(0, 20)}...`);
 
     try {
-      // Verifiziere Token mit Supabase
-      const supabase = this.supabaseService.getClient();
-      const {
-        data: { user },
-        error,
-      } = await supabase.auth.getUser(token);
-
-      if (error) {
-        this.logger.error(`Supabase Auth Fehler: ${error.message}`);
-        throw new UnauthorizedException(`Ungültiges Token: ${error.message}`);
+      // Verifiziere Token lokal via JWKS (kein Netzwerk-Roundtrip zu Supabase)
+      const supabaseUrl = (process.env.SUPABASE_URL || '').trim();
+      let payload: Record<string, unknown>;
+      try {
+        const result = await jwtVerify(token, this.jwks, {
+          issuer: `${supabaseUrl}/auth/v1`,
+          audience: 'authenticated',
+        });
+        payload = result.payload;
+      } catch (verifyError) {
+        const message =
+          verifyError instanceof Error ? verifyError.message : 'Unknown error';
+        this.logger.error(`JWT-Verifizierung fehlgeschlagen: ${message}`);
+        throw new UnauthorizedException(`Ungültiges Token: ${message}`);
       }
 
-      if (!user) {
-        this.logger.warn('Kein User trotz fehlendem Error');
+      const userId = typeof payload.sub === 'string' ? payload.sub : undefined;
+      const userEmail =
+        typeof payload.email === 'string' ? payload.email : undefined;
+      const userMetadata =
+        (payload.user_metadata as Record<string, unknown> | undefined) ?? {};
+
+      if (!userId) {
+        this.logger.warn('Token ohne gültige User-ID (sub)');
         throw new UnauthorizedException('Ungültiges Token');
       }
 
-      this.logger.debug(`User erfolgreich authentifiziert: ${user.email}`);
+      this.logger.debug(`User erfolgreich authentifiziert: ${userEmail}`);
 
       // Hole User-Profile mit Rolle aus DB
       let profile = await this.profileRepo.findOne({
-        where: { id: user.id },
+        where: { id: userId },
       });
 
-      this.logger.debug(`DB Lookup für User ID: ${user.id}, Email: ${user.email}`);
+      this.logger.debug(
+        `DB Lookup für User ID: ${userId}, Email: ${userEmail}`,
+      );
       this.logger.debug(`Gefundenes Profil: ${JSON.stringify(profile)}`);
 
       // Erstelle automatisch ein Profile, falls es nicht existiert
@@ -85,53 +105,57 @@ export class SupabaseAuthGuard implements CanActivate {
         // eindeutig hält, ist das eindeutig derselbe Account - repariere die ID
         // statt an der Unique-Constraint auf email zu scheitern.
         const existingByEmail = await this.profileRepo.findOne({
-          where: { email: user.email! },
+          where: { email: userEmail! },
         });
 
         if (existingByEmail) {
           this.logger.warn(
-            `Verwaistes Profil für ${user.email} gefunden (alte ID: ${existingByEmail.id}, aktuelle Auth-ID: ${user.id}) - repariere ID`,
+            `Verwaistes Profil für ${userEmail} gefunden (alte ID: ${existingByEmail.id}, aktuelle Auth-ID: ${userId}) - repariere ID`,
           );
           try {
             await this.profileRepo.update(
               { id: existingByEmail.id },
-              { id: user.id },
+              { id: userId },
             );
             profile = await this.profileRepo.findOne({
-              where: { id: user.id },
+              where: { id: userId },
             });
           } catch (repairError) {
             const repairMessage =
-              repairError instanceof Error ? repairError.message : 'Unknown error';
+              repairError instanceof Error
+                ? repairError.message
+                : 'Unknown error';
             this.logger.error(
-              `Konnte verwaistes Profil für ${user.email} nicht reparieren: ${repairMessage}`,
+              `Konnte verwaistes Profil für ${userEmail} nicht reparieren: ${repairMessage}`,
             );
             throw new UnauthorizedException(
               'Für diese E-Mail-Adresse existiert bereits ein Profil mit abweichender ID. Bitte kontaktiere den Support.',
             );
           }
         } else {
-          this.logger.log(`Erstelle neues User-Profile für ${user.email}`);
+          this.logger.log(`Erstelle neues User-Profile für ${userEmail}`);
           profile = this.profileRepo.create({
-            id: user.id,
-            email: user.email!,
+            id: userId,
+            email: userEmail!,
             role: UserRole.USER, // Standard-Rolle
-            firstName: user.user_metadata?.firstName,
-            lastName: user.user_metadata?.lastName,
+            firstName: userMetadata.firstName as string | undefined,
+            lastName: userMetadata.lastName as string | undefined,
           });
           await this.profileRepo.save(profile);
         }
       }
 
       if (!profile) {
-        throw new UnauthorizedException('Benutzerprofil konnte nicht geladen werden');
+        throw new UnauthorizedException(
+          'Benutzerprofil konnte nicht geladen werden',
+        );
       }
 
       // Füge User zu Request hinzu für späteren Zugriff
       request.user = {
-        id: user.id,
-        email: user.email,
-        ...user.user_metadata,
+        id: userId,
+        email: userEmail,
+        ...userMetadata,
         role: profile.role, // DB-Rolle hat Priorität über metadata
       };
 
@@ -142,7 +166,8 @@ export class SupabaseAuthGuard implements CanActivate {
       if (error instanceof UnauthorizedException) {
         throw error;
       }
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const errorMessage =
+        error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(`Token-Validierung fehlgeschlagen: ${errorMessage}`);
       throw new UnauthorizedException('Token-Validierung fehlgeschlagen');
     }
