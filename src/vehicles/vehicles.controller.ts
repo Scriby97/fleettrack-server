@@ -30,7 +30,9 @@ export class VehiclesController {
   /**
    * Ermittelt die Organisation(en), auf die eine Anfrage gescoped werden soll.
    * Administratoren: kein Filter (undefined), optional per ?organizationId= einschränkbar.
-   * Normale User: alle Organisationen, in denen sie Mitglied sind (leeres Array = keine).
+   * Normale User: mit ?organizationId= genau diese eine (muss eigene Mitgliedschaft sein) -
+   * für den Organisations-Switcher im Frontend. Ohne Parameter alle eigenen Organisationen
+   * (leeres Array = keine).
    */
   private async resolveOrganizationIds(
     user: AuthUser,
@@ -39,7 +41,21 @@ export class VehiclesController {
     if (user.role === UserRole.ADMINISTRATOR) {
       return queryOrgId ? [queryOrgId] : undefined;
     }
-    return this.membersService.getOrganizationIds(user.id);
+
+    const organizationIds = await this.membersService.getOrganizationIds(
+      user.id,
+    );
+
+    if (queryOrgId) {
+      if (!organizationIds.includes(queryOrgId)) {
+        throw new ForbiddenException(
+          'Du bist kein Mitglied dieser Organisation',
+        );
+      }
+      return [queryOrgId];
+    }
+
+    return organizationIds;
   }
 
   /**
