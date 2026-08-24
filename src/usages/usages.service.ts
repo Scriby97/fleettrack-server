@@ -14,20 +14,31 @@ export class UsagesService {
    * Find all usages, optionally filtered by organization membership
    * Uses JOIN with vehicles table since usages don't have direct organizationId
    * @param organizationIds - undefined = kein Filter (nur Administratoren), leeres Array = keine Organisation -> keine Usages
+   * @param creatorId - falls gesetzt (normale Mitarbeiter ohne Admin/Owner-Rolle), zusätzlich auf die eigenen Usages einschränken
    */
-  async findAll(organizationIds?: string[]): Promise<UsageEntity[]> {
+  async findAll(
+    organizationIds?: string[],
+    creatorId?: string,
+  ): Promise<UsageEntity[]> {
     if (organizationIds && organizationIds.length === 0) {
       return [];
     }
 
-    if (organizationIds) {
-      return this.repo
+    if (organizationIds || creatorId) {
+      const qb = this.repo
         .createQueryBuilder('usage')
-        .innerJoin('usage.vehicle', 'vehicle')
-        .where('vehicle.organizationId IN (:...organizationIds)', {
+        .innerJoin('usage.vehicle', 'vehicle');
+
+      if (organizationIds) {
+        qb.where('vehicle.organizationId IN (:...organizationIds)', {
           organizationIds,
-        })
-        .getMany();
+        });
+      }
+      if (creatorId) {
+        qb.andWhere('usage.creatorId = :creatorId', { creatorId });
+      }
+
+      return qb.getMany();
     }
     // Administrator ohne Organisations-Filter sieht alle Usages
     return this.repo.find();
@@ -37,8 +48,12 @@ export class UsagesService {
    * Find all usages with vehicle data included
    * Returns usages with nested vehicle information (id, name, plate)
    * @param organizationIds - undefined = kein Filter (nur Administratoren), leeres Array = keine Organisation -> keine Usages
+   * @param creatorId - falls gesetzt (normale Mitarbeiter ohne Admin/Owner-Rolle), zusätzlich auf die eigenen Usages einschränken
    */
-  async findAllWithVehicles(organizationIds?: string[]): Promise<any[]> {
+  async findAllWithVehicles(
+    organizationIds?: string[],
+    creatorId?: string,
+  ): Promise<any[]> {
     if (organizationIds && organizationIds.length === 0) {
       return [];
     }
@@ -53,6 +68,9 @@ export class UsagesService {
       queryBuilder.where('vehicle.organizationId IN (:...organizationIds)', {
         organizationIds,
       });
+    }
+    if (creatorId) {
+      queryBuilder.andWhere('usage.creatorId = :creatorId', { creatorId });
     }
 
     const usages = await queryBuilder.getMany();

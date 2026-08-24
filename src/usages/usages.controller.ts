@@ -17,7 +17,7 @@ import { UpdateUsageDto } from './dto/update-usage.dto';
 import { UsageEntity } from './usage.entity';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthUser } from '../auth/decorators/current-user.decorator';
-import { UserRole } from '../auth/enums/user-role.enum';
+import { UserRole, OrganizationRole } from '../auth/enums/user-role.enum';
 import { OrganizationMembersService } from '../organizations/organization-members.service';
 
 @Controller('usages')
@@ -60,10 +60,45 @@ export class UsagesController {
   }
 
   /**
+   * Mitarbeiter (employee) sehen nur ihre eigenen Usages; Admin/Owner (jeder
+   * betroffenen Organisation) und globale Administratoren sehen alle. Prüft
+   * jede resolvte Organisation einzeln - reicht eine davon Admin/Owner-Rechte,
+   * wird nicht eingeschränkt.
+   */
+  private async resolveCreatorIdFilter(
+    user: AuthUser,
+    organizationIds: string[] | undefined,
+  ): Promise<string | undefined> {
+    if (user.role === UserRole.ADMINISTRATOR) {
+      return undefined;
+    }
+    if (!organizationIds || organizationIds.length === 0) {
+      return undefined;
+    }
+
+    for (const organizationId of organizationIds) {
+      const membership = await this.membersService.findMembership(
+        user.id,
+        organizationId,
+      );
+      if (
+        membership &&
+        (membership.role === OrganizationRole.ADMIN ||
+          membership.role === OrganizationRole.OWNER)
+      ) {
+        return undefined;
+      }
+    }
+
+    return user.id;
+  }
+
+  /**
    * GET /usages/with-vehicles
    * Alle Nutzungen mit Fahrzeug-Daten abrufen (benötigt Auth)
-   * Administratoren sehen alle Usages oder können mit ?organizationId=... filtern
-   * Normale Users sehen nur Usages ihrer eigenen Organisation(en)
+   * Administratoren sehen alle Usages oder können mit ?organizationId=... filtern.
+   * Admin/Owner einer Organisation sehen alle Usages dieser Organisation,
+   * Mitarbeiter (employee) nur ihre eigenen.
    */
   @Get('with-vehicles')
   async getAllWithVehicles(
@@ -71,16 +106,20 @@ export class UsagesController {
     @Query('organizationId') queryOrgId?: string,
   ) {
     const organizationIds = await this.resolveOrganizationIds(user, queryOrgId);
-    const usages =
-      await this.usagesService.findAllWithVehicles(organizationIds);
+    const creatorId = await this.resolveCreatorIdFilter(user, organizationIds);
+    const usages = await this.usagesService.findAllWithVehicles(
+      organizationIds,
+      creatorId,
+    );
     return { usages };
   }
 
   /**
    * GET /usages
    * Alle Nutzungen abrufen (benötigt Auth)
-   * Administratoren sehen alle Usages oder können mit ?organizationId=... filtern
-   * Normale Users sehen nur Usages ihrer eigenen Organisation(en)
+   * Administratoren sehen alle Usages oder können mit ?organizationId=... filtern.
+   * Admin/Owner einer Organisation sehen alle Usages dieser Organisation,
+   * Mitarbeiter (employee) nur ihre eigenen.
    */
   @Get()
   async getAll(
@@ -88,7 +127,8 @@ export class UsagesController {
     @Query('organizationId') queryOrgId?: string,
   ) {
     const organizationIds = await this.resolveOrganizationIds(user, queryOrgId);
-    return this.usagesService.findAll(organizationIds);
+    const creatorId = await this.resolveCreatorIdFilter(user, organizationIds);
+    return this.usagesService.findAll(organizationIds, creatorId);
   }
 
   /**
@@ -118,7 +158,9 @@ export class UsagesController {
   /**
    * PUT /usages/:id
    * Usage aktualisieren (benötigt Auth)
-   * Normale User dürfen nur Usages ihrer eigenen Organisation(en) bearbeiten
+   * Admin/Owner der Organisation (oder globale Administratoren) dürfen jede
+   * Usage bearbeiten. Mitarbeiter (employee) dürfen zusätzlich ihre eigenen
+   * Usages bearbeiten, aber keine fremden.
    */
   @Put(':id')
   async update(
@@ -127,7 +169,7 @@ export class UsagesController {
     @CurrentUser() user: AuthUser,
   ) {
     if (user.role !== UserRole.ADMINISTRATOR) {
-      await this.assertUsageInUsersOrganization(id, user);
+      await this.assertCanEditUsage(id, user);
     }
 
     const partial: Partial<UsageEntity> = {
@@ -139,12 +181,13 @@ export class UsagesController {
   /**
    * DELETE /usages/:id
    * Usage löschen (benötigt Auth)
-   * Normale User dürfen nur Usages ihrer eigenen Organisation(en) löschen
+   * Nur Admin/Owner der Organisation (oder globale Administratoren) dürfen
+   * Usages löschen - Mitarbeiter (employee) nicht, auch nicht ihre eigenen.
    */
   @Delete(':id')
   async remove(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     if (user.role !== UserRole.ADMINISTRATOR) {
-      await this.assertUsageInUsersOrganization(id, user);
+      await this.assertCanManageUsage(id, user);
     }
 
     await this.usagesService.delete(id);
@@ -170,7 +213,12 @@ export class UsagesController {
     }
   }
 
-  private async assertUsageInUsersOrganization(
+  /**
+   * Nur Admin/Owner der Organisation, zu der die Usage gehört, dürfen sie
+   * löschen - auch der ursprüngliche Ersteller (employee) nicht, wenn er
+   * nicht selbst Admin/Owner ist.
+   */
+  private async assertCanManageUsage(
     usageId: string,
     user: AuthUser,
   ): Promise<void> {
@@ -179,11 +227,51 @@ export class UsagesController {
       throw new NotFoundException(`Usage with id ${usageId} not found`);
     }
 
-    const organizationIds = await this.membersService.getOrganizationIds(
+    const membership = await this.membersService.findMembership(
       user.id,
+      usage.vehicle.organizationId,
     );
-    if (!organizationIds.includes(usage.vehicle.organizationId)) {
-      throw new ForbiddenException('Usage gehört nicht zu deiner Organisation');
+    if (
+      !membership ||
+      (membership.role !== OrganizationRole.ADMIN &&
+        membership.role !== OrganizationRole.OWNER)
+    ) {
+      throw new ForbiddenException(
+        'Nur Organisations-Admins oder -Owner dürfen Nutzungen löschen',
+      );
+    }
+  }
+
+  /**
+   * Admin/Owner der Organisation dürfen jede Usage bearbeiten. Ein Mitarbeiter
+   * (employee) darf zusätzlich seine eigene Usage bearbeiten (aber keine
+   * fremde).
+   */
+  private async assertCanEditUsage(
+    usageId: string,
+    user: AuthUser,
+  ): Promise<void> {
+    const usage = await this.usagesService.findOne(usageId);
+    if (!usage) {
+      throw new NotFoundException(`Usage with id ${usageId} not found`);
+    }
+
+    if (usage.creatorId === user.id) {
+      return;
+    }
+
+    const membership = await this.membersService.findMembership(
+      user.id,
+      usage.vehicle.organizationId,
+    );
+    if (
+      !membership ||
+      (membership.role !== OrganizationRole.ADMIN &&
+        membership.role !== OrganizationRole.OWNER)
+    ) {
+      throw new ForbiddenException(
+        'Nur Organisations-Admins oder -Owner dürfen fremde Nutzungen bearbeiten',
+      );
     }
   }
 }
