@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { OrganizationsService } from './organizations.service';
 import { OrganizationsInvitesService } from './organizations-invites.service';
@@ -26,7 +26,7 @@ import { BillingModule } from '../billing/billing.module';
       UserProfileEntity,
     ]),
     AuthModule,
-    BillingModule,
+    forwardRef(() => BillingModule),
   ],
   controllers: [OrganizationsController, InvitesController],
   providers: [

@@ -10,6 +10,7 @@ import type { Request } from 'express';
 import type Stripe from 'stripe';
 import { StripeService } from './stripe.service';
 import { OrganizationSubscriptionsService } from '../organizations/organization-subscriptions.service';
+import { OrganizationsService } from '../organizations/organizations.service';
 import { SubscriptionTier } from '../organizations/enums/subscription-tier.enum';
 import { Public } from '../auth/decorators/public.decorator';
 
@@ -20,6 +21,7 @@ export class BillingController {
   constructor(
     private readonly stripeService: StripeService,
     private readonly subscriptionsService: OrganizationSubscriptionsService,
+    private readonly organizationsService: OrganizationsService,
   ) {}
 
   /**
@@ -46,24 +48,16 @@ export class BillingController {
 
     switch (event.type) {
       case 'checkout.session.completed':
-        await this.handleCheckoutSessionCompleted(
-          event.data.object as Stripe.Checkout.Session,
-        );
+        await this.handleCheckoutSessionCompleted(event.data.object);
         break;
       case 'customer.subscription.updated':
-        await this.handleSubscriptionUpdated(
-          event.data.object as Stripe.Subscription,
-        );
+        await this.handleSubscriptionUpdated(event.data.object);
         break;
       case 'customer.subscription.deleted':
-        await this.handleSubscriptionDeleted(
-          event.data.object as Stripe.Subscription,
-        );
+        await this.handleSubscriptionDeleted(event.data.object);
         break;
       case 'invoice.payment_failed':
-        await this.handleInvoicePaymentFailed(
-          event.data.object as Stripe.Invoice,
-        );
+        await this.handleInvoicePaymentFailed(event.data.object);
         break;
       default:
         // Andere Event-Typen (z.B. invoice.paid) sind aktuell nicht relevant für uns.
@@ -74,12 +68,17 @@ export class BillingController {
   }
 
   /**
-   * Aktiviert den bezahlten Tier nach erfolgreichem Checkout (erste Zahlung).
+   * Checkout abgeschlossen (erste Zahlung bestätigt). Zwei Fälle, unterschieden
+   * über die Metadaten:
+   * - metadata.organizationId gesetzt: bestehende Organisation wird auf den
+   *   bezahlten Tier hochgestuft (Upgrade-Flow über Settings).
+   * - metadata.pendingOrgName gesetzt: die Organisation existiert noch gar nicht
+   *   und wird jetzt, mit bestätigter Zahlung, zum ersten Mal angelegt
+   *   (Selfservice-Erstellung mit bezahltem Tier).
    */
   private async handleCheckoutSessionCompleted(
     session: Stripe.Checkout.Session,
   ): Promise<void> {
-    const organizationId = session.client_reference_id;
     const tier = session.metadata?.tier as SubscriptionTier | undefined;
     const stripeCustomerId =
       typeof session.customer === 'string' ? session.customer : undefined;
@@ -88,22 +87,58 @@ export class BillingController {
         ? session.subscription
         : undefined;
 
-    if (!organizationId || !tier) {
+    if (!tier) {
       this.logger.warn(
-        `checkout.session.completed ohne organizationId/tier: sessionId=${session.id}`,
+        `checkout.session.completed ohne tier: sessionId=${session.id}`,
       );
       return;
     }
 
-    await this.subscriptionsService.activatePaidTier(
-      organizationId,
-      tier,
-      stripeCustomerId ?? '',
-      stripeSubscriptionId ?? '',
-    );
+    const organizationId = session.metadata?.organizationId;
+    const pendingOrgName = session.metadata?.pendingOrgName;
 
-    this.logger.log(
-      `Subscription aktiviert: organizationId=${organizationId} tier=${tier}`,
+    if (organizationId) {
+      await this.subscriptionsService.activatePaidTier(
+        organizationId,
+        tier,
+        stripeCustomerId ?? '',
+        stripeSubscriptionId ?? '',
+      );
+
+      this.logger.log(
+        `Subscription aktiviert: organizationId=${organizationId} tier=${tier}`,
+      );
+      return;
+    }
+
+    if (pendingOrgName) {
+      const ownerUserId = session.metadata?.ownerUserId;
+      if (!ownerUserId) {
+        this.logger.error(
+          `checkout.session.completed mit pendingOrgName aber ohne ownerUserId: sessionId=${session.id}`,
+        );
+        return;
+      }
+
+      const { organization } =
+        await this.organizationsService.createFromStripeCheckout({
+          name: pendingOrgName,
+          subdomain: session.metadata?.pendingOrgSubdomain || undefined,
+          contactEmail: session.metadata?.pendingOrgContactEmail || undefined,
+          ownerUserId,
+          tier,
+          stripeCustomerId: stripeCustomerId ?? '',
+          stripeSubscriptionId: stripeSubscriptionId ?? '',
+        });
+
+      this.logger.log(
+        `Organisation nach Zahlung angelegt: organizationId=${organization.id} name=${pendingOrgName} tier=${tier}`,
+      );
+      return;
+    }
+
+    this.logger.warn(
+      `checkout.session.completed ohne organizationId/pendingOrgName: sessionId=${session.id}`,
     );
   }
 
@@ -182,8 +217,9 @@ export class BillingController {
     // API-Versionen hinweg verschoben (früher invoice.subscription, neuere Versionen
     // invoice.parent.subscription_details.subscription) - defensiv beide Formen lesen,
     // statt uns auf ein bestimmtes stripe-node-Typing festzulegen.
-    const legacySubscriptionRef = (invoice as unknown as { subscription?: unknown })
-      .subscription;
+    const legacySubscriptionRef = (
+      invoice as unknown as { subscription?: unknown }
+    ).subscription;
     const parentSubscriptionRef = (
       invoice as unknown as {
         parent?: { subscription_details?: { subscription?: unknown } };

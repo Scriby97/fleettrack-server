@@ -136,6 +136,76 @@ export class StripeService {
   }
 
   /**
+   * Erstellt eine Stripe Checkout Session für eine noch NICHT existierende
+   * Organisation (Selfservice-Erstellung mit bezahltem Tier). Die Organisation
+   * selbst wird erst im checkout.session.completed Webhook angelegt, sobald die
+   * Zahlung bestätigt ist - so bleibt bei Abbruch/Fehlschlag keine Karteileiche
+   * in der DB zurück. Alle zur Erstellung nötigen Daten wandern dafür in die
+   * Metadaten statt in client_reference_id/organizationId (die es noch nicht gibt).
+   */
+  async createCheckoutSessionForNewOrganization(params: {
+    name: string;
+    subdomain?: string;
+    contactEmail?: string;
+    ownerUserId: string;
+    tier: SubscriptionTier;
+    customerEmail?: string;
+  }): Promise<string> {
+    const stripe = this.getClientOrThrow();
+    const priceId = this.getPriceIdForTier(params.tier);
+    const frontendUrl = this.getFrontendUrl();
+
+    const pendingOrgMetadata: Record<string, string> = {
+      pendingOrgName: params.name,
+      ownerUserId: params.ownerUserId,
+      tier: params.tier,
+    };
+    if (params.subdomain) {
+      pendingOrgMetadata.pendingOrgSubdomain = params.subdomain;
+    }
+    if (params.contactEmail) {
+      pendingOrgMetadata.pendingOrgContactEmail = params.contactEmail;
+    }
+
+    const session = await stripe.checkout.sessions.create(
+      {
+        mode: 'subscription',
+        line_items: [{ price: priceId, quantity: 1 }],
+        client_reference_id: params.ownerUserId,
+        customer_email: params.customerEmail,
+        automatic_tax: { enabled: true },
+        tax_id_collection: { enabled: true },
+        billing_address_collection: 'required',
+        metadata: pendingOrgMetadata,
+        subscription_data: {
+          metadata: pendingOrgMetadata,
+        },
+        success_url: `${frontendUrl}/onboarding/create-organization/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${frontendUrl}/onboarding/create-organization?canceled=1`,
+      },
+      {
+        // Pro User + Name + Tier + Minute deduplizieren, ohne spätere legitime
+        // Checkouts dauerhaft zu blockieren.
+        idempotencyKey: `checkout_new_org_${params.ownerUserId}_${params.name}_${params.tier}_${Math.floor(
+          Date.now() / 60_000,
+        )}`,
+      },
+    );
+
+    if (!session.url) {
+      throw new InternalServerErrorException(
+        'Stripe Checkout Session konnte nicht erstellt werden',
+      );
+    }
+
+    this.logger.log(
+      `Checkout Session für neue Organisation erstellt: name=${params.name} ownerUserId=${params.ownerUserId} tier=${params.tier} sessionId=${session.id}`,
+    );
+
+    return session.url;
+  }
+
+  /**
    * Erstellt eine Stripe Customer Portal Session, damit Kunden ihre Zahlungsmethode,
    * Rechnungen (Invoicing!) und ihr Abo selbst verwalten können, ohne dass wir das
    * nachbauen müssen. Muss einmalig unter dashboard.stripe.com/settings/billing/portal
@@ -148,7 +218,8 @@ export class StripeService {
     const stripe = this.getClientOrThrow();
     const session = await stripe.billingPortal.sessions.create({
       customer: params.stripeCustomerId,
-      return_url: params.returnUrl ?? `${this.getFrontendUrl()}/settings/billing`,
+      return_url:
+        params.returnUrl ?? `${this.getFrontendUrl()}/settings/billing`,
     });
     return session.url;
   }

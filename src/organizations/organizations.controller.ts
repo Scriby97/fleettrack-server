@@ -49,31 +49,45 @@ export class OrganizationsController {
   /**
    * POST /organizations/self-service
    * Erstellt eine Organisation für den aktuellen User (jeder eingeloggte User darf das).
-   * Der User wird sofort Owner. Die Organisation startet immer auf Lieutenant (Free);
-   * bei einem bezahlten Tier wird zusätzlich eine Stripe Checkout Session erstellt und
-   * der Tier erst nach erfolgreicher Zahlung (Webhook) aktiviert.
+   * Der User wird sofort Owner.
+   *
+   * Lieutenant (kostenlos): Organisation wird sofort angelegt, keine Zahlung nötig.
+   * Captain/General (bezahlt): Es wird NUR eine Stripe Checkout Session erstellt -
+   * die Organisation selbst entsteht erst im checkout.session.completed Webhook,
+   * sobald die Zahlung bestätigt ist. So bleibt bei Abbruch/Fehlschlag der Zahlung
+   * keine unvollständige Organisation in der DB zurück.
    */
   @Post('self-service')
   async createSelfService(
     @Body() dto: CreateSelfServiceOrganizationDto,
     @CurrentUser() user: AuthUser,
   ) {
-    const { organization, subscription } =
-      await this.organizationsService.createSelfService(dto, user.id);
-
-    let checkoutUrl: string | null = null;
     if (
       dto.tier === SubscriptionTier.CAPTAIN ||
       dto.tier === SubscriptionTier.GENERAL
     ) {
-      checkoutUrl = await this.stripeService.createCheckoutSession({
-        organizationId: organization.id,
-        tier: dto.tier,
-        customerEmail: user.email,
-      });
+      // Vorab-Check, damit der User nicht erst bezahlt und danach an einer
+      // Namens-Kollision scheitert (schließt die seltene Race Condition zwischen
+      // diesem Check und Zahlungsabschluss nicht aus, siehe createFromStripeCheckout).
+      await this.organizationsService.assertNameAvailable(dto.name);
+
+      const checkoutUrl =
+        await this.stripeService.createCheckoutSessionForNewOrganization({
+          name: dto.name,
+          subdomain: dto.subdomain,
+          contactEmail: dto.contactEmail,
+          ownerUserId: user.id,
+          tier: dto.tier,
+          customerEmail: user.email,
+        });
+
+      return { organization: null, subscription: null, checkoutUrl };
     }
 
-    return { organization, subscription, checkoutUrl };
+    const { organization, subscription } =
+      await this.organizationsService.createSelfService(dto, user.id);
+
+    return { organization, subscription, checkoutUrl: null };
   }
 
   @Post()

@@ -69,6 +69,27 @@ export class OrganizationSubscriptionsService {
   }
 
   /**
+   * Legt eine Subscription direkt auf einem bezahlten Tier an (statt erst auf
+   * Lieutenant und dann upzugraden) - für die Selfservice-Organisationserstellung,
+   * bei der die Organisation selbst erst nach erfolgreicher Zahlung entsteht.
+   */
+  async createPaid(
+    organizationId: string,
+    tier: SubscriptionTier,
+    stripeCustomerId: string,
+    stripeSubscriptionId: string,
+  ): Promise<OrganizationSubscriptionEntity> {
+    const subscription = this.subscriptionRepository.create({
+      organizationId,
+      tier,
+      status: SubscriptionStatus.ACTIVE,
+      stripeCustomerId,
+      stripeSubscriptionId,
+    });
+    return this.subscriptionRepository.save(subscription);
+  }
+
+  /**
    * Aktiviert einen bezahlten Tier nach erfolgreichem Stripe Checkout (Webhook)
    */
   async activatePaidTier(
@@ -107,7 +128,8 @@ export class OrganizationSubscriptionsService {
         : stripeStatus === 'canceled'
           ? SubscriptionStatus.CANCELED
           : SubscriptionStatus.ACTIVE;
-    if (currentPeriodStart) subscription.currentPeriodStart = currentPeriodStart;
+    if (currentPeriodStart)
+      subscription.currentPeriodStart = currentPeriodStart;
     if (currentPeriodEnd) subscription.currentPeriodEnd = currentPeriodEnd;
     return this.subscriptionRepository.save(subscription);
   }

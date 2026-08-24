@@ -1,14 +1,16 @@
-import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
+import { Module, forwardRef } from '@nestjs/common';
 import { StripeService } from './stripe.service';
 import { BillingController } from './billing.controller';
-import { OrganizationSubscriptionsService } from '../organizations/organization-subscriptions.service';
-import { OrganizationSubscriptionEntity } from '../organizations/organization-subscription.entity';
+import { OrganizationsModule } from '../organizations/organizations.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([OrganizationSubscriptionEntity])],
+  // forwardRef: OrganizationsModule imports BillingModule (for StripeService in
+  // OrganizationsController) and BillingModule imports OrganizationsModule (for
+  // OrganizationsService/OrganizationSubscriptionsService in BillingController) -
+  // genuinely circular at the module level.
+  imports: [forwardRef(() => OrganizationsModule)],
   controllers: [BillingController],
-  providers: [StripeService, OrganizationSubscriptionsService],
+  providers: [StripeService],
   exports: [StripeService],
 })
 export class BillingModule {}
