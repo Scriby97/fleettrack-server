@@ -6,6 +6,10 @@ import {
   SubscriptionTier,
   SubscriptionStatus,
 } from './enums/subscription-tier.enum';
+import {
+  SUBSCRIPTION_LIMITS,
+  SubscriptionLimits,
+} from './constants/subscription-limits.constant';
 
 @Injectable()
 export class OrganizationSubscriptionsService {
@@ -28,6 +32,15 @@ export class OrganizationSubscriptionsService {
     }
 
     return subscription;
+  }
+
+  /**
+   * Die Tarif-Limits (maxVehicles/maxMembers) der aktuellen Subscription einer
+   * Organisation - für die Durchsetzung beim Anlegen von Fahrzeugen/Invites.
+   */
+  async getLimits(organizationId: string): Promise<SubscriptionLimits> {
+    const subscription = await this.findByOrganization(organizationId);
+    return SUBSCRIPTION_LIMITS[subscription.tier];
   }
 
   /**

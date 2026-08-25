@@ -19,12 +19,14 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthUser } from '../auth/decorators/current-user.decorator';
 import { UserRole, OrganizationRole } from '../auth/enums/user-role.enum';
 import { OrganizationMembersService } from '../organizations/organization-members.service';
+import { OrganizationSubscriptionsService } from '../organizations/organization-subscriptions.service';
 
 @Controller('vehicles')
 export class VehiclesController {
   constructor(
     private readonly vehiclesService: VehiclesService,
     private readonly membersService: OrganizationMembersService,
+    private readonly subscriptionsService: OrganizationSubscriptionsService,
   ) {}
 
   /**
@@ -185,6 +187,27 @@ export class VehiclesController {
   }
 
   /**
+   * Stellt sicher, dass das maxVehicles-Limit des aktuellen Tarifs der
+   * Organisation noch nicht erreicht ist (null = unlimitiert).
+   */
+  private async assertVehicleLimitNotExceeded(
+    organizationId: string,
+  ): Promise<void> {
+    const limits = await this.subscriptionsService.getLimits(organizationId);
+    if (limits.maxVehicles === null) {
+      return;
+    }
+
+    const currentCount =
+      await this.vehiclesService.countActive(organizationId);
+    if (currentCount >= limits.maxVehicles) {
+      throw new ForbiddenException(
+        `Das Fahrzeug-Limit von ${limits.maxVehicles} für den aktuellen Tarif ist erreicht. Bitte upgraden Sie das Abonnement, um weitere Fahrzeuge zu erfassen.`,
+      );
+    }
+  }
+
+  /**
    * POST /vehicles
    * Neues Fahrzeug erstellen
    * Administratoren für jede Organisation, Org-Admins/Owner nur für ihre eigene
@@ -195,6 +218,7 @@ export class VehiclesController {
       user,
       dto.organizationId,
     );
+    await this.assertVehicleLimitNotExceeded(orgId);
     return this.vehiclesService.create({ ...dto, organizationId: orgId });
   }
 

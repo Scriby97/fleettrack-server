@@ -241,6 +241,21 @@ export class OrganizationsInvitesService {
   }
 
   /**
+   * Anzahl offener (nicht verwendeter, nicht abgelaufener) Invites einer
+   * Organisation - zählt beim maxMembers-Tarif-Limit mit, damit nicht mehr
+   * Invites verschickt werden können als noch freie Plätze vorhanden sind.
+   */
+  async countPendingByOrganization(organizationId: string): Promise<number> {
+    return this.inviteRepository.count({
+      where: {
+        organizationId,
+        usedAt: IsNull(),
+        expiresAt: MoreThan(new Date()),
+      },
+    });
+  }
+
+  /**
    * Holt alle Invites einer Organisation
    */
   async getInvitesByOrganization(

@@ -70,6 +70,14 @@ export class VehiclesService {
     return this.repo.findOne({ where: { id } });
   }
 
+  /**
+   * Anzahl aktiver (nicht ausgemusterter) Fahrzeuge einer Organisation - für
+   * die Durchsetzung des maxVehicles-Tarif-Limits.
+   */
+  async countActive(organizationId: string): Promise<number> {
+    return this.repo.count({ where: { organizationId, isRetired: false } });
+  }
+
   async create(
     data: Partial<Vehicle> & { organizationId: string },
   ): Promise<Vehicle> {

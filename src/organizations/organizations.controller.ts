@@ -164,6 +164,31 @@ export class OrganizationsController {
   }
 
   /**
+   * Stellt sicher, dass das maxMembers-Limit des aktuellen Tarifs noch nicht
+   * erreicht ist (null = unlimitiert). Zählt bestehende Mitglieder UND bereits
+   * offene Invites zusammen, damit nicht mehr Plätze verschickt werden können
+   * als der Tarif zulässt.
+   */
+  private async assertMemberLimitNotExceeded(
+    organizationId: string,
+  ): Promise<void> {
+    const limits = await this.subscriptionsService.getLimits(organizationId);
+    if (limits.maxMembers === null) {
+      return;
+    }
+
+    const [memberCount, pendingInviteCount] = await Promise.all([
+      this.membersService.countByOrganization(organizationId),
+      this.invitesService.countPendingByOrganization(organizationId),
+    ]);
+    if (memberCount + pendingInviteCount >= limits.maxMembers) {
+      throw new ForbiddenException(
+        `Das Mitglieder-Limit von ${limits.maxMembers} für den aktuellen Tarif ist erreicht. Bitte upgraden Sie das Abonnement, um weitere Mitarbeiter einzuladen.`,
+      );
+    }
+  }
+
+  /**
    * POST /organizations/invites
    * Erstellt einen Invite-Link für die eigene Organization
    * Administratoren können für beliebige Orgs inviten,
@@ -180,6 +205,7 @@ export class OrganizationsController {
       user,
       queryOrgId || createInviteDto.organizationId,
     );
+    await this.assertMemberLimitNotExceeded(targetOrgId);
 
     return this.invitesService.createInvite(
       targetOrgId,

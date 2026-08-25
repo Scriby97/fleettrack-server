@@ -83,6 +83,15 @@ export class OrganizationMembersService {
   }
 
   /**
+   * Anzahl Mitglieder einer Organisation - für die Durchsetzung des
+   * maxMembers-Tarif-Limits (zusammen mit den offenen Invites gezählt, siehe
+   * OrganizationsInvitesService.countPendingByOrganization).
+   */
+  async countByOrganization(organizationId: string): Promise<number> {
+    return this.memberRepository.count({ where: { organizationId } });
+  }
+
+  /**
    * Die Mitgliedschaft eines Users in einer bestimmten Organisation (oder null)
    */
   async findMembership(
