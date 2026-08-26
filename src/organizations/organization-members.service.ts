@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
@@ -101,22 +102,83 @@ export class OrganizationMembersService {
     return this.memberRepository.findOne({ where: { userId, organizationId } });
   }
 
+  /**
+   * Ändert die Rolle eines Mitglieds - ausser der Owner-Rolle, die nur über
+   * transferOwnership() geändert werden kann (siehe dort). Zusätzlich zur
+   * Mindestrolle "Admin" (bereits von OrganizationRolesGuard geprüft) gilt:
+   * Nur der Owner darf einen Admin zurück zu Employee degradieren.
+   */
   async updateRole(
     organizationId: string,
     memberId: string,
     role: OrganizationRole,
+    callerRole: OrganizationRole,
   ): Promise<OrganizationMemberEntity> {
     const member = await this.findMemberOrThrow(organizationId, memberId);
 
     if (
-      member.role === OrganizationRole.OWNER &&
-      role !== OrganizationRole.OWNER
+      member.role === OrganizationRole.OWNER ||
+      role === OrganizationRole.OWNER
     ) {
-      await this.assertNotLastOwner(organizationId);
+      throw new BadRequestException(
+        'Die Owner-Rolle kann nur über die Rollen-Übergabe geändert werden',
+      );
+    }
+
+    if (
+      member.role === OrganizationRole.ADMIN &&
+      role === OrganizationRole.EMPLOYEE &&
+      callerRole !== OrganizationRole.OWNER
+    ) {
+      throw new ForbiddenException(
+        'Nur der Owner kann einen Admin zum Mitarbeiter zurückstufen',
+      );
     }
 
     member.role = role;
     return this.memberRepository.save(member);
+  }
+
+  /**
+   * Übergibt die Owner-Rolle atomar an ein anderes Mitglied - der bisherige
+   * Owner wird dabei Admin. Läuft in einer Transaktion, damit nie 0 oder 2
+   * Owner gleichzeitig existieren können.
+   */
+  async transferOwnership(
+    organizationId: string,
+    currentOwnerMembershipId: string,
+    newOwnerMemberId: string,
+  ): Promise<{
+    previousOwner: OrganizationMemberEntity;
+    newOwner: OrganizationMemberEntity;
+  }> {
+    if (newOwnerMemberId === currentOwnerMembershipId) {
+      throw new BadRequestException('Du bist bereits Owner dieser Organisation');
+    }
+
+    return this.memberRepository.manager.transaction(async (manager) => {
+      const repo = manager.getRepository(OrganizationMemberEntity);
+
+      const [currentOwner, newOwner] = await Promise.all([
+        repo.findOne({ where: { id: currentOwnerMembershipId, organizationId } }),
+        repo.findOne({ where: { id: newOwnerMemberId, organizationId } }),
+      ]);
+
+      if (!currentOwner || currentOwner.role !== OrganizationRole.OWNER) {
+        throw new BadRequestException(
+          'Aktueller Owner konnte nicht ermittelt werden',
+        );
+      }
+      if (!newOwner) {
+        throw new NotFoundException('Ziel-Mitglied nicht gefunden');
+      }
+
+      currentOwner.role = OrganizationRole.ADMIN;
+      newOwner.role = OrganizationRole.OWNER;
+      await repo.save([currentOwner, newOwner]);
+
+      return { previousOwner: currentOwner, newOwner };
+    });
   }
 
   async remove(organizationId: string, memberId: string): Promise<void> {

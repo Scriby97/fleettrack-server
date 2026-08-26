@@ -20,6 +20,7 @@ import { CreateSelfServiceOrganizationDto } from './dto/create-self-service-orga
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
 import { CreateInviteDto } from './dto/create-invite.dto';
 import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
+import { TransferOwnershipDto } from './dto/transfer-ownership.dto';
 import { UpdateSubscriptionDto } from './dto/update-subscription.dto';
 import { SUBSCRIPTION_LIMITS } from './constants/subscription-limits.constant';
 import { SupabaseAuthGuard } from '../auth/guards/supabase-auth.guard';
@@ -32,7 +33,11 @@ import { OrganizationRolesGuard } from '../auth/guards/organization-roles.guard'
 import { OrganizationRoles } from '../auth/decorators/organization-roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthUser } from '../auth/decorators/current-user.decorator';
-import { CurrentOrganization } from '../auth/decorators/current-organization.decorator';
+import {
+  CurrentOrganization,
+  CurrentOrganizationMembership,
+} from '../auth/decorators/current-organization.decorator';
+import type { OrganizationMemberEntity } from './organization-member.entity';
 import { StripeService } from '../billing/stripe.service';
 
 @Controller('organizations')
@@ -293,8 +298,10 @@ export class OrganizationsController {
 
   /**
    * PATCH /organizations/:organizationId/members/:memberId
-   * Rolle eines Mitglieds ändern
-   * Nur Administratoren oder Org-Admins/Owner
+   * Rolle eines Mitglieds ändern (Employee <-> Admin)
+   * Nur Administratoren oder Org-Admins/Owner. Die Owner-Rolle kann über
+   * diesen Endpoint nicht gesetzt/entfernt werden - dafür gibt es
+   * transfer-ownership. Ein Admin zu Employee zurückstufen darf nur der Owner.
    */
   @Patch(':organizationId/members/:memberId')
   @UseGuards(OrganizationGuard, OrganizationRolesGuard)
@@ -303,8 +310,36 @@ export class OrganizationsController {
     @Param('organizationId') organizationId: string,
     @Param('memberId') memberId: string,
     @Body() dto: UpdateMemberRoleDto,
+    @CurrentOrganizationMembership() membership: OrganizationMemberEntity,
   ) {
-    return this.membersService.updateRole(organizationId, memberId, dto.role);
+    return this.membersService.updateRole(
+      organizationId,
+      memberId,
+      dto.role,
+      membership.role as OrganizationRole,
+    );
+  }
+
+  /**
+   * POST /organizations/:organizationId/transfer-ownership
+   * Übergibt die Owner-Rolle an ein anderes Mitglied der Organisation - der
+   * bisherige Owner wird dabei automatisch Admin. Nur der aktuelle Owner darf
+   * das auslösen. Die Subscription/Stripe-Zuordnung hängt an der
+   * organizationId, nicht am Owner, und muss daher nicht angepasst werden.
+   */
+  @Post(':organizationId/transfer-ownership')
+  @UseGuards(OrganizationGuard, OrganizationRolesGuard)
+  @OrganizationRoles(OrganizationRole.OWNER)
+  transferOwnership(
+    @Param('organizationId') organizationId: string,
+    @Body() dto: TransferOwnershipDto,
+    @CurrentOrganizationMembership() membership: OrganizationMemberEntity,
+  ) {
+    return this.membersService.transferOwnership(
+      organizationId,
+      membership.id,
+      dto.newOwnerMemberId,
+    );
   }
 
   /**
