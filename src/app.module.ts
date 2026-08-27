@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -10,6 +11,8 @@ import { OrganizationEntity } from './organizations/organization.entity';
 import { OrganizationMemberEntity } from './organizations/organization-member.entity';
 import { OrganizationSubscriptionEntity } from './organizations/organization-subscription.entity';
 import { OrganizationInviteEntity } from './organizations/entities/organization-invite.entity';
+import { UsageReminderEntity } from './notifications/usage-reminder.entity';
+import { PushSubscriptionEntity } from './notifications/push-subscription.entity';
 import { UsagesService } from './usages/usages.service';
 import { VehiclesController } from './vehicles/vehicles.controller';
 import { UsagesController } from './usages/usages.controller';
@@ -18,6 +21,7 @@ import { SupabaseModule } from './supabase/supabase.module';
 import { AuthModule } from './auth/auth.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { BillingModule } from './billing/billing.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -25,6 +29,7 @@ import { BillingModule } from './billing/billing.module';
       isGlobal: true,
       envFilePath: '.env',
     }),
+    ScheduleModule.forRoot(),
     TypeOrmModule.forRoot({
       type: 'postgres',
       url: process.env.DATABASE_URL,
@@ -36,6 +41,8 @@ import { BillingModule } from './billing/billing.module';
         OrganizationMemberEntity,
         OrganizationSubscriptionEntity,
         OrganizationInviteEntity,
+        UsageReminderEntity,
+        PushSubscriptionEntity,
       ],
       synchronize: false, // Temporär deaktiviert - wir machen Migrations manuell
       ssl:
@@ -58,6 +65,7 @@ import { BillingModule } from './billing/billing.module';
     AuthModule,
     OrganizationsModule,
     BillingModule,
+    NotificationsModule,
   ],
   controllers: [AppController, VehiclesController, UsagesController],
   providers: [AppService, VehiclesService, UsagesService],

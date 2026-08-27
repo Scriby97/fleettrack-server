@@ -1,0 +1,97 @@
+import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { UsageReminderEntity } from './usage-reminder.entity';
+import { PushSubscriptionEntity } from './push-subscription.entity';
+import { CreatePushSubscriptionDto } from './dto/push-subscription.dto';
+
+@Injectable()
+export class NotificationsService {
+  constructor(
+    @InjectRepository(UsageReminderEntity)
+    private readonly reminderRepository: Repository<UsageReminderEntity>,
+    @InjectRepository(PushSubscriptionEntity)
+    private readonly subscriptionRepository: Repository<PushSubscriptionEntity>,
+  ) {}
+
+  /**
+   * Erinnerungs-Einstellungen des Users - falls noch keine existieren, ein
+   * deaktiviertes Default-Objekt zurueckgeben statt 404 (einfacher fuers Frontend).
+   */
+  async getReminder(userId: string): Promise<UsageReminderEntity> {
+    const existing = await this.reminderRepository.findOne({
+      where: { userId },
+    });
+    if (existing) return existing;
+
+    return this.reminderRepository.create({
+      userId,
+      enabled: false,
+      reminderTime: '20:00',
+      timezone: 'Europe/Zurich',
+    });
+  }
+
+  async updateReminder(
+    userId: string,
+    enabled: boolean,
+    time: string,
+  ): Promise<UsageReminderEntity> {
+    let reminder = await this.reminderRepository.findOne({
+      where: { userId },
+    });
+    if (!reminder) {
+      reminder = this.reminderRepository.create({ userId });
+    }
+    reminder.enabled = enabled;
+    reminder.reminderTime = time;
+    return this.reminderRepository.save(reminder);
+  }
+
+  async addSubscription(
+    userId: string,
+    dto: CreatePushSubscriptionDto,
+  ): Promise<PushSubscriptionEntity> {
+    const existing = await this.subscriptionRepository.findOne({
+      where: { endpoint: dto.endpoint },
+    });
+    if (existing) {
+      existing.userId = userId;
+      existing.p256dh = dto.keys.p256dh;
+      existing.auth = dto.keys.auth;
+      return this.subscriptionRepository.save(existing);
+    }
+
+    const subscription = this.subscriptionRepository.create({
+      userId,
+      endpoint: dto.endpoint,
+      p256dh: dto.keys.p256dh,
+      auth: dto.keys.auth,
+    });
+    return this.subscriptionRepository.save(subscription);
+  }
+
+  async removeSubscription(userId: string, endpoint: string): Promise<void> {
+    await this.subscriptionRepository.delete({ userId, endpoint });
+  }
+
+  async removeSubscriptionByEndpoint(endpoint: string): Promise<void> {
+    await this.subscriptionRepository.delete({ endpoint });
+  }
+
+  async findDueReminders(nowHhMm: string): Promise<UsageReminderEntity[]> {
+    return this.reminderRepository
+      .createQueryBuilder('reminder')
+      .where('reminder.enabled = true')
+      .andWhere('reminder."reminderTime" = :nowHhMm', { nowHhMm })
+      .getMany();
+  }
+
+  async markSent(reminderId: string): Promise<void> {
+    await this.reminderRepository.update(reminderId, { lastSentAt: new Date() });
+  }
+
+  async getSubscriptionsForUser(userId: string): Promise<PushSubscriptionEntity[]> {
+    return this.subscriptionRepository.find({ where: { userId } });
+  }
+}
