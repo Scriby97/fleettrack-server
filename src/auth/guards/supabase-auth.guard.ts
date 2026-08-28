@@ -1,10 +1,4 @@
-import {
-  Injectable,
-  CanActivate,
-  ExecutionContext,
-  UnauthorizedException,
-  Logger,
-} from '@nestjs/common';
+import { Injectable, CanActivate, ExecutionContext, Logger } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -12,6 +6,7 @@ import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 import { UserProfileEntity } from '../entities/user-profile.entity';
 import { UserRole } from '../enums/user-role.enum';
+import { AppUnauthorizedException, ErrorCode } from '../../common/exceptions';
 
 @Injectable()
 export class SupabaseAuthGuard implements CanActivate {
@@ -54,7 +49,10 @@ export class SupabaseAuthGuard implements CanActivate {
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       this.logger.warn('Kein gültiger Authorization Header');
-      throw new UnauthorizedException('Kein gültiger Authorization Header');
+      throw new AppUnauthorizedException(
+        ErrorCode.AUTH_MISSING_HEADER,
+        'Kein gültiger Authorization Header',
+      );
     }
 
     const token = authHeader.substring(7); // Entferne "Bearer "
@@ -74,7 +72,11 @@ export class SupabaseAuthGuard implements CanActivate {
         const message =
           verifyError instanceof Error ? verifyError.message : 'Unknown error';
         this.logger.error(`JWT-Verifizierung fehlgeschlagen: ${message}`);
-        throw new UnauthorizedException(`Ungültiges Token: ${message}`);
+        throw new AppUnauthorizedException(
+          ErrorCode.AUTH_TOKEN_VERIFICATION_FAILED,
+          `Ungültiges Token: ${message}`,
+          { reason: message },
+        );
       }
 
       const userId = typeof payload.sub === 'string' ? payload.sub : undefined;
@@ -85,7 +87,10 @@ export class SupabaseAuthGuard implements CanActivate {
 
       if (!userId) {
         this.logger.warn('Token ohne gültige User-ID (sub)');
-        throw new UnauthorizedException('Ungültiges Token');
+        throw new AppUnauthorizedException(
+          ErrorCode.AUTH_TOKEN_INVALID,
+          'Ungültiges Token',
+        );
       }
 
       this.logger.debug(`User erfolgreich authentifiziert: ${userEmail}`);
@@ -131,7 +136,8 @@ export class SupabaseAuthGuard implements CanActivate {
             this.logger.error(
               `Konnte verwaistes Profil für ${userEmail} nicht reparieren: ${repairMessage}`,
             );
-            throw new UnauthorizedException(
+            throw new AppUnauthorizedException(
+              ErrorCode.AUTH_PROFILE_CONFLICT,
               'Für diese E-Mail-Adresse existiert bereits ein Profil mit abweichender ID. Bitte kontaktiere den Support.',
             );
           }
@@ -149,7 +155,8 @@ export class SupabaseAuthGuard implements CanActivate {
       }
 
       if (!profile) {
-        throw new UnauthorizedException(
+        throw new AppUnauthorizedException(
+          ErrorCode.AUTH_PROFILE_LOAD_FAILED,
           'Benutzerprofil konnte nicht geladen werden',
         );
       }
@@ -166,13 +173,16 @@ export class SupabaseAuthGuard implements CanActivate {
 
       return true;
     } catch (error) {
-      if (error instanceof UnauthorizedException) {
+      if (error instanceof AppUnauthorizedException) {
         throw error;
       }
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(`Token-Validierung fehlgeschlagen: ${errorMessage}`);
-      throw new UnauthorizedException('Token-Validierung fehlgeschlagen');
+      throw new AppUnauthorizedException(
+        ErrorCode.AUTH_UNAUTHORIZED_GENERIC,
+        'Token-Validierung fehlgeschlagen',
+      );
     }
   }
 }

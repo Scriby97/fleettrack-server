@@ -1,8 +1,9 @@
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { VehicleEntity } from './vehicle.entity';
 import { UsageEntity } from '../usages/usage.entity';
+import { AppNotFoundException, ErrorCode } from '../common/exceptions';
 
 export interface Vehicle {
   id: string;
@@ -178,7 +179,11 @@ export class VehiclesService {
     const vehicle = await this.repo.findOne({ where: { id } });
 
     if (!vehicle) {
-      throw new NotFoundException(`Vehicle with ID ${id} not found`);
+      throw new AppNotFoundException(
+        ErrorCode.VEHICLE_NOT_FOUND,
+        `Vehicle with ID ${id} not found`,
+        { id },
+      );
     }
 
     Object.assign(vehicle, data);
@@ -197,7 +202,11 @@ export class VehiclesService {
     const vehicle = await this.repo.findOne({ where: { id } });
 
     if (!vehicle) {
-      throw new NotFoundException(`Vehicle with ID ${id} not found`);
+      throw new AppNotFoundException(
+        ErrorCode.VEHICLE_NOT_FOUND,
+        `Vehicle with ID ${id} not found`,
+        { id },
+      );
     }
 
     // Check if vehicle has any usages

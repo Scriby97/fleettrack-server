@@ -1,11 +1,4 @@
-import {
-  Injectable,
-  NotFoundException,
-  BadRequestException,
-  ConflictException,
-  ForbiddenException,
-  Logger,
-} from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ILike, IsNull, MoreThan, Repository } from 'typeorm';
 import { OrganizationInviteEntity } from './entities/organization-invite.entity';
@@ -14,6 +7,13 @@ import { OrganizationMemberEntity } from './organization-member.entity';
 import { CreateInviteDto } from './dto/create-invite.dto';
 import { UserRole, OrganizationRole } from '../auth/enums/user-role.enum';
 import { randomBytes } from 'crypto';
+import {
+  AppBadRequestException,
+  AppConflictException,
+  AppForbiddenException,
+  AppNotFoundException,
+  ErrorCode,
+} from '../common/exceptions';
 
 @Injectable()
 export class OrganizationsInvitesService {
@@ -47,11 +47,17 @@ export class OrganizationsInvitesService {
     });
 
     if (!organization) {
-      throw new NotFoundException('Organization not found');
+      throw new AppNotFoundException(
+        ErrorCode.INVITE_ORGANIZATION_NOT_FOUND,
+        'Organization not found',
+      );
     }
 
     if (!organization.isActive) {
-      throw new BadRequestException('Organization is not active');
+      throw new AppBadRequestException(
+        ErrorCode.ORGANIZATION_INACTIVE,
+        'Organization is not active',
+      );
     }
 
     // Prüfe ob bereits ein aktiver Invite für diese Email existiert
@@ -64,7 +70,8 @@ export class OrganizationsInvitesService {
     });
 
     if (existingInvite && existingInvite.expiresAt > new Date()) {
-      throw new ConflictException(
+      throw new AppConflictException(
+        ErrorCode.INVITE_ALREADY_EXISTS,
         'An active invite for this email already exists',
       );
     }
@@ -108,19 +115,31 @@ export class OrganizationsInvitesService {
     });
 
     if (!invite) {
-      throw new NotFoundException('Invite not found');
+      throw new AppNotFoundException(
+        ErrorCode.INVITE_NOT_FOUND,
+        'Invite not found',
+      );
     }
 
     if (invite.usedAt) {
-      throw new BadRequestException('This invite has already been used');
+      throw new AppBadRequestException(
+        ErrorCode.INVITE_ALREADY_USED,
+        'This invite has already been used',
+      );
     }
 
     if (invite.expiresAt < new Date()) {
-      throw new BadRequestException('This invite has expired');
+      throw new AppBadRequestException(
+        ErrorCode.INVITE_EXPIRED,
+        'This invite has expired',
+      );
     }
 
     if (!invite.organization.isActive) {
-      throw new BadRequestException('Organization is not active');
+      throw new AppBadRequestException(
+        ErrorCode.ORGANIZATION_INACTIVE,
+        'Organization is not active',
+      );
     }
 
     return invite;
@@ -216,7 +235,8 @@ export class OrganizationsInvitesService {
     const invite = await this.validateInvite(token);
 
     if (invite.email.toLowerCase() !== userEmail.toLowerCase()) {
-      throw new ForbiddenException(
+      throw new AppForbiddenException(
+        ErrorCode.INVITE_EMAIL_MISMATCH,
         'Diese Einladung ist nicht an deine Email-Adresse gerichtet',
       );
     }
@@ -232,7 +252,8 @@ export class OrganizationsInvitesService {
     const invite = await this.validateInvite(token);
 
     if (invite.email.toLowerCase() !== userEmail.toLowerCase()) {
-      throw new ForbiddenException(
+      throw new AppForbiddenException(
+        ErrorCode.INVITE_EMAIL_MISMATCH,
         'Diese Einladung ist nicht an deine Email-Adresse gerichtet',
       );
     }
@@ -292,14 +313,18 @@ export class OrganizationsInvitesService {
     });
 
     if (!invite) {
-      throw new NotFoundException('Invite not found');
+      throw new AppNotFoundException(
+        ErrorCode.INVITE_NOT_FOUND,
+        'Invite not found',
+      );
     }
 
     if (
       userRole !== UserRole.ADMINISTRATOR &&
       !(managedOrganizationIds ?? []).includes(invite.organizationId)
     ) {
-      throw new ForbiddenException(
+      throw new AppForbiddenException(
+        ErrorCode.INVITE_DELETE_FORBIDDEN,
         'You can only delete invites from your organization',
       );
     }

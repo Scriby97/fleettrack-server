@@ -1,13 +1,14 @@
-import {
-  Injectable,
-  NotFoundException,
-  BadRequestException,
-  ForbiddenException,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { OrganizationMemberEntity } from './organization-member.entity';
 import { OrganizationRole } from '../auth/enums/user-role.enum';
+import {
+  AppBadRequestException,
+  AppForbiddenException,
+  AppNotFoundException,
+  ErrorCode,
+} from '../common/exceptions';
 
 @Injectable()
 export class OrganizationMembersService {
@@ -120,7 +121,8 @@ export class OrganizationMembersService {
       member.role === OrganizationRole.OWNER ||
       role === OrganizationRole.OWNER
     ) {
-      throw new BadRequestException(
+      throw new AppBadRequestException(
+        ErrorCode.MEMBER_ROLE_OWNER_VIA_TRANSFER_ONLY,
         'Die Owner-Rolle kann nur über die Rollen-Übergabe geändert werden',
       );
     }
@@ -130,7 +132,8 @@ export class OrganizationMembersService {
       role === OrganizationRole.EMPLOYEE &&
       callerRole !== OrganizationRole.OWNER
     ) {
-      throw new ForbiddenException(
+      throw new AppForbiddenException(
+        ErrorCode.MEMBER_DEMOTE_FORBIDDEN,
         'Nur der Owner kann einen Admin zum Mitarbeiter zurückstufen',
       );
     }
@@ -153,7 +156,10 @@ export class OrganizationMembersService {
     newOwner: OrganizationMemberEntity;
   }> {
     if (newOwnerMemberId === currentOwnerMembershipId) {
-      throw new BadRequestException('Du bist bereits Owner dieser Organisation');
+      throw new AppBadRequestException(
+        ErrorCode.MEMBER_ALREADY_OWNER,
+        'Du bist bereits Owner dieser Organisation',
+      );
     }
 
     return this.memberRepository.manager.transaction(async (manager) => {
@@ -165,12 +171,16 @@ export class OrganizationMembersService {
       ]);
 
       if (!currentOwner || currentOwner.role !== OrganizationRole.OWNER) {
-        throw new BadRequestException(
+        throw new AppBadRequestException(
+          ErrorCode.MEMBER_CURRENT_OWNER_NOT_FOUND,
           'Aktueller Owner konnte nicht ermittelt werden',
         );
       }
       if (!newOwner) {
-        throw new NotFoundException('Ziel-Mitglied nicht gefunden');
+        throw new AppNotFoundException(
+          ErrorCode.MEMBER_TARGET_NOT_FOUND,
+          'Ziel-Mitglied nicht gefunden',
+        );
       }
 
       currentOwner.role = OrganizationRole.ADMIN;
@@ -200,7 +210,10 @@ export class OrganizationMembersService {
     });
 
     if (!member) {
-      throw new NotFoundException('Organization member not found');
+      throw new AppNotFoundException(
+        ErrorCode.MEMBER_NOT_FOUND,
+        'Organization member not found',
+      );
     }
 
     return member;
@@ -212,7 +225,8 @@ export class OrganizationMembersService {
     });
 
     if (ownerCount <= 1) {
-      throw new BadRequestException(
+      throw new AppBadRequestException(
+        ErrorCode.MEMBER_LAST_OWNER,
         'Cannot remove or demote the last owner of an organization',
       );
     }

@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  NotFoundException,
-  ConflictException,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { OrganizationEntity } from './organization.entity';
@@ -15,6 +11,11 @@ import { OrganizationSubscriptionsService } from './organization-subscriptions.s
 import { OrganizationMembersService } from './organization-members.service';
 import { OrganizationRole } from '../auth/enums/user-role.enum';
 import { SubscriptionTier } from './enums/subscription-tier.enum';
+import {
+  AppConflictException,
+  AppNotFoundException,
+  ErrorCode,
+} from '../common/exceptions';
 
 @Injectable()
 export class OrganizationsService {
@@ -84,7 +85,8 @@ export class OrganizationsService {
       savedOrganization = await this.organizationRepository.save(organization);
     } catch (error) {
       if ((error as { code?: string }).code === '23505') {
-        throw new ConflictException(
+        throw new AppConflictException(
+          ErrorCode.ORG_NAME_TAKEN,
           'Eine Organisation mit diesem Namen existiert bereits',
         );
       }
@@ -113,7 +115,8 @@ export class OrganizationsService {
       where: { name },
     });
     if (existing) {
-      throw new ConflictException(
+      throw new AppConflictException(
+        ErrorCode.ORG_NAME_TAKEN,
         'Eine Organisation mit diesem Namen existiert bereits',
       );
     }
@@ -154,7 +157,8 @@ export class OrganizationsService {
         // erfolgreicher Zahlung von jemand anderem vergeben. Die Zahlung ist
         // zu diesem Zeitpunkt bereits erfolgt - das erfordert manuelles Klären
         // (Rückerstattung oder anderer Name), daher lauter Log statt stillem Fehlschlag.
-        throw new ConflictException(
+        throw new AppConflictException(
+          ErrorCode.ORG_NAME_TAKEN_AFTER_PAYMENT,
           `Zahlung erfolgreich, aber Organisationsname "${params.name}" wurde zwischenzeitlich vergeben ` +
             `(ownerUserId=${params.ownerUserId}, stripeCustomerId=${params.stripeCustomerId}, ` +
             `stripeSubscriptionId=${params.stripeSubscriptionId}) - erfordert manuelle Klärung`,
@@ -190,7 +194,11 @@ export class OrganizationsService {
     });
 
     if (!organization) {
-      throw new NotFoundException(`Organization with ID ${id} not found`);
+      throw new AppNotFoundException(
+        ErrorCode.ORGANIZATION_NOT_FOUND,
+        `Organization with ID ${id} not found`,
+        { id },
+      );
     }
 
     return organization;

@@ -1,7 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DeepPartial } from 'typeorm';
 import { UsageEntity } from './usage.entity';
+import { AppNotFoundException, ErrorCode } from '../common/exceptions';
 
 @Injectable()
 export class UsagesService {
@@ -125,7 +126,11 @@ export class UsagesService {
     await this.repo.update(id, data);
     const updated = await this.repo.findOne({ where: { id } });
     if (!updated) {
-      throw new NotFoundException(`Usage with id ${id} not found`);
+      throw new AppNotFoundException(
+        ErrorCode.USAGE_NOT_FOUND,
+        `Usage with id ${id} not found`,
+        { id },
+      );
     }
     return updated;
   }

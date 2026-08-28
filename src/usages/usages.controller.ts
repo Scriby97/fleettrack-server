@@ -7,8 +7,6 @@ import {
   Body,
   Param,
   Query,
-  ForbiddenException,
-  NotFoundException,
 } from '@nestjs/common';
 import { UsagesService } from './usages.service';
 import { VehiclesService } from '../vehicles/vehicles.service';
@@ -19,6 +17,11 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthUser } from '../auth/decorators/current-user.decorator';
 import { UserRole, OrganizationRole } from '../auth/enums/user-role.enum';
 import { OrganizationMembersService } from '../organizations/organization-members.service';
+import {
+  AppForbiddenException,
+  AppNotFoundException,
+  ErrorCode,
+} from '../common/exceptions';
 
 @Controller('usages')
 export class UsagesController {
@@ -49,7 +52,8 @@ export class UsagesController {
 
     if (queryOrgId) {
       if (!organizationIds.includes(queryOrgId)) {
-        throw new ForbiddenException(
+        throw new AppForbiddenException(
+          ErrorCode.ORG_NOT_MEMBER_OF_TARGET,
           'Du bist kein Mitglied dieser Organisation',
         );
       }
@@ -202,12 +206,16 @@ export class UsagesController {
       user.id,
     );
     if (organizationIds.length === 0) {
-      throw new ForbiddenException('Du gehörst keiner Organisation an');
+      throw new AppForbiddenException(
+        ErrorCode.ORG_NO_MEMBERSHIP,
+        'Du gehörst keiner Organisation an',
+      );
     }
 
     const vehicle = await this.vehiclesService.findOne(vehicleId);
     if (!vehicle || !organizationIds.includes(vehicle.organizationId)) {
-      throw new ForbiddenException(
+      throw new AppForbiddenException(
+        ErrorCode.VEHICLE_NOT_IN_YOUR_ORG,
         'Fahrzeug gehört nicht zu deiner Organisation',
       );
     }
@@ -224,7 +232,11 @@ export class UsagesController {
   ): Promise<void> {
     const usage = await this.usagesService.findOne(usageId);
     if (!usage) {
-      throw new NotFoundException(`Usage with id ${usageId} not found`);
+      throw new AppNotFoundException(
+        ErrorCode.USAGE_NOT_FOUND,
+        `Usage with id ${usageId} not found`,
+        { id: usageId },
+      );
     }
 
     const membership = await this.membersService.findMembership(
@@ -236,7 +248,8 @@ export class UsagesController {
       (membership.role !== OrganizationRole.ADMIN &&
         membership.role !== OrganizationRole.OWNER)
     ) {
-      throw new ForbiddenException(
+      throw new AppForbiddenException(
+        ErrorCode.USAGE_DELETE_FORBIDDEN,
         'Nur Organisations-Admins oder -Owner dürfen Nutzungen löschen',
       );
     }
@@ -253,7 +266,11 @@ export class UsagesController {
   ): Promise<void> {
     const usage = await this.usagesService.findOne(usageId);
     if (!usage) {
-      throw new NotFoundException(`Usage with id ${usageId} not found`);
+      throw new AppNotFoundException(
+        ErrorCode.USAGE_NOT_FOUND,
+        `Usage with id ${usageId} not found`,
+        { id: usageId },
+      );
     }
 
     if (usage.creatorId === user.id) {
@@ -269,7 +286,8 @@ export class UsagesController {
       (membership.role !== OrganizationRole.ADMIN &&
         membership.role !== OrganizationRole.OWNER)
     ) {
-      throw new ForbiddenException(
+      throw new AppForbiddenException(
+        ErrorCode.USAGE_EDIT_FORBIDDEN,
         'Nur Organisations-Admins oder -Owner dürfen fremde Nutzungen bearbeiten',
       );
     }

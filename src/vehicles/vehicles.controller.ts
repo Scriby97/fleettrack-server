@@ -7,9 +7,6 @@ import {
   Param,
   Put,
   Query,
-  BadRequestException,
-  ForbiddenException,
-  NotFoundException,
 } from '@nestjs/common';
 import { VehiclesService } from './vehicles.service';
 import { VehicleEntity } from './vehicle.entity';
@@ -20,6 +17,12 @@ import type { AuthUser } from '../auth/decorators/current-user.decorator';
 import { UserRole, OrganizationRole } from '../auth/enums/user-role.enum';
 import { OrganizationMembersService } from '../organizations/organization-members.service';
 import { OrganizationSubscriptionsService } from '../organizations/organization-subscriptions.service';
+import {
+  AppBadRequestException,
+  AppForbiddenException,
+  AppNotFoundException,
+  ErrorCode,
+} from '../common/exceptions';
 
 @Controller('vehicles')
 export class VehiclesController {
@@ -50,7 +53,8 @@ export class VehiclesController {
 
     if (queryOrgId) {
       if (!organizationIds.includes(queryOrgId)) {
-        throw new ForbiddenException(
+        throw new AppForbiddenException(
+          ErrorCode.ORG_NOT_MEMBER_OF_TARGET,
           'Du bist kein Mitglied dieser Organisation',
         );
       }
@@ -105,7 +109,8 @@ export class VehiclesController {
       );
       const vehicle = await this.vehiclesService.findOne(vehicleId);
       if (!vehicle || !organizationIds.includes(vehicle.organizationId)) {
-        throw new ForbiddenException(
+        throw new AppForbiddenException(
+          ErrorCode.VEHICLE_NOT_IN_YOUR_ORG,
           'Fahrzeug gehört nicht zu deiner Organisation',
         );
       }
@@ -127,7 +132,10 @@ export class VehiclesController {
   ): Promise<string> {
     if (user.role === UserRole.ADMINISTRATOR) {
       if (!requestedOrgId) {
-        throw new BadRequestException('Organization ID is required');
+        throw new AppBadRequestException(
+          ErrorCode.VALIDATION_BAD_REQUEST_GENERIC,
+          'Organization ID is required',
+        );
       }
       return requestedOrgId;
     }
@@ -138,7 +146,8 @@ export class VehiclesController {
 
     if (requestedOrgId) {
       if (!managedOrgIds.includes(requestedOrgId)) {
-        throw new ForbiddenException(
+        throw new AppForbiddenException(
+          ErrorCode.ORG_NOT_MANAGER,
           'Du bist nicht Admin oder Owner dieser Organisation',
         );
       }
@@ -149,11 +158,13 @@ export class VehiclesController {
       return managedOrgIds[0];
     }
     if (managedOrgIds.length === 0) {
-      throw new ForbiddenException(
+      throw new AppForbiddenException(
+        ErrorCode.ORG_VEHICLE_MANAGE_FORBIDDEN,
         'Nur Organisations-Admins oder -Owner dürfen Fahrzeuge verwalten',
       );
     }
-    throw new BadRequestException(
+    throw new AppBadRequestException(
+      ErrorCode.ORG_ID_AMBIGUOUS,
       'Bitte organizationId angeben - du verwaltest mehrere Organisationen',
     );
   }
@@ -180,7 +191,8 @@ export class VehiclesController {
       (membership.role !== OrganizationRole.ADMIN &&
         membership.role !== OrganizationRole.OWNER)
     ) {
-      throw new ForbiddenException(
+      throw new AppForbiddenException(
+        ErrorCode.ORG_VEHICLE_MANAGE_FORBIDDEN,
         'Nur Organisations-Admins oder -Owner dürfen Fahrzeuge verwalten',
       );
     }
@@ -201,8 +213,10 @@ export class VehiclesController {
     const currentCount =
       await this.vehiclesService.countActive(organizationId);
     if (currentCount >= limits.maxVehicles) {
-      throw new ForbiddenException(
+      throw new AppForbiddenException(
+        ErrorCode.VEHICLE_LIMIT_REACHED,
         `Das Fahrzeug-Limit von ${limits.maxVehicles} für den aktuellen Tarif ist erreicht. Bitte upgraden Sie das Abonnement, um weitere Fahrzeuge zu erfassen.`,
+        { limit: limits.maxVehicles },
       );
     }
   }
@@ -235,7 +249,11 @@ export class VehiclesController {
   ) {
     const vehicle = await this.vehiclesService.findOne(id);
     if (!vehicle) {
-      throw new NotFoundException(`Vehicle with ID ${id} not found`);
+      throw new AppNotFoundException(
+        ErrorCode.VEHICLE_NOT_FOUND,
+        `Vehicle with ID ${id} not found`,
+        { id },
+      );
     }
     await this.assertCanManageVehicle(user, vehicle);
     return this.vehiclesService.update(id, dto);
@@ -252,7 +270,11 @@ export class VehiclesController {
   async delete(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     const vehicle = await this.vehiclesService.findOne(id);
     if (!vehicle) {
-      throw new NotFoundException(`Vehicle with ID ${id} not found`);
+      throw new AppNotFoundException(
+        ErrorCode.VEHICLE_NOT_FOUND,
+        `Vehicle with ID ${id} not found`,
+        { id },
+      );
     }
     await this.assertCanManageVehicle(user, vehicle);
     return this.vehiclesService.delete(id);

@@ -1,11 +1,7 @@
-import {
-  Injectable,
-  CanActivate,
-  ExecutionContext,
-  ForbiddenException,
-} from '@nestjs/common';
+import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { OrganizationRole } from '../enums/user-role.enum';
+import { AppForbiddenException, ErrorCode } from '../../common/exceptions';
 
 /**
  * Guard to check if user has required role within an organization
@@ -29,7 +25,8 @@ export class OrganizationRolesGuard implements CanActivate {
     const membership = request.organizationMembership;
 
     if (!membership) {
-      throw new ForbiddenException(
+      throw new AppForbiddenException(
+        ErrorCode.AUTH_FORBIDDEN_GENERIC,
         'Organization membership not found in request',
       );
     }
@@ -47,7 +44,8 @@ export class OrganizationRolesGuard implements CanActivate {
     );
 
     if (!userRoleLevel || userRoleLevel < minRequiredLevel) {
-      throw new ForbiddenException(
+      throw new AppForbiddenException(
+        ErrorCode.AUTH_FORBIDDEN_GENERIC,
         `Requires one of roles: ${requiredRoles.join(', ')}`,
       );
     }

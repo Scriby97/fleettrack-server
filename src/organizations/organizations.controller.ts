@@ -8,8 +8,6 @@ import {
   Delete,
   UseGuards,
   Query,
-  BadRequestException,
-  ForbiddenException,
 } from '@nestjs/common';
 import { OrganizationsService } from './organizations.service';
 import { OrganizationsInvitesService } from './organizations-invites.service';
@@ -39,6 +37,11 @@ import {
 } from '../auth/decorators/current-organization.decorator';
 import type { OrganizationMemberEntity } from './organization-member.entity';
 import { StripeService } from '../billing/stripe.service';
+import {
+  AppBadRequestException,
+  AppForbiddenException,
+  ErrorCode,
+} from '../common/exceptions';
 
 @Controller('organizations')
 @UseGuards(SupabaseAuthGuard, RolesGuard)
@@ -137,7 +140,10 @@ export class OrganizationsController {
   ): Promise<string> {
     if (user.role === UserRole.ADMINISTRATOR) {
       if (!requestedOrgId) {
-        throw new BadRequestException('Organization ID is required');
+        throw new AppBadRequestException(
+          ErrorCode.VALIDATION_BAD_REQUEST_GENERIC,
+          'Organization ID is required',
+        );
       }
       return requestedOrgId;
     }
@@ -148,7 +154,8 @@ export class OrganizationsController {
 
     if (requestedOrgId) {
       if (!managedOrgIds.includes(requestedOrgId)) {
-        throw new ForbiddenException(
+        throw new AppForbiddenException(
+          ErrorCode.ORG_NOT_MANAGER,
           'Du bist nicht Admin oder Owner dieser Organisation',
         );
       }
@@ -159,11 +166,13 @@ export class OrganizationsController {
       return managedOrgIds[0];
     }
     if (managedOrgIds.length === 0) {
-      throw new ForbiddenException(
+      throw new AppForbiddenException(
+        ErrorCode.ORG_INVITE_MANAGE_FORBIDDEN,
         'Nur Organisations-Admins oder -Owner dürfen Einladungen verwalten',
       );
     }
-    throw new BadRequestException(
+    throw new AppBadRequestException(
+      ErrorCode.ORG_ID_AMBIGUOUS,
       'Bitte organizationId angeben - du verwaltest mehrere Organisationen',
     );
   }
@@ -187,8 +196,10 @@ export class OrganizationsController {
       this.invitesService.countPendingByOrganization(organizationId),
     ]);
     if (memberCount + pendingInviteCount >= limits.maxMembers) {
-      throw new ForbiddenException(
+      throw new AppForbiddenException(
+        ErrorCode.MEMBER_LIMIT_REACHED,
         `Das Mitglieder-Limit von ${limits.maxMembers} für den aktuellen Tarif ist erreicht. Bitte upgraden Sie das Abonnement, um weitere Mitarbeiter einzuladen.`,
+        { limit: limits.maxMembers },
       );
     }
   }
@@ -243,7 +254,10 @@ export class OrganizationsController {
     const targetOrgId = queryOrgId || organizationIds[0];
 
     if (!targetOrgId || !organizationIds.includes(targetOrgId)) {
-      throw new ForbiddenException('Du bist kein Mitglied dieser Organisation');
+      throw new AppForbiddenException(
+        ErrorCode.ORG_NOT_MEMBER_OF_TARGET,
+        'Du bist kein Mitglied dieser Organisation',
+      );
     }
 
     return this.invitesService.getInvitesByOrganization(targetOrgId);
@@ -433,7 +447,8 @@ export class OrganizationsController {
     // Wechsel zwischen bezahlten Tiers (Captain <-> General): direkt auf der
     // bestehenden Stripe Subscription umstellen, inkl. Proration.
     if (!current.stripeSubscriptionId) {
-      throw new BadRequestException(
+      throw new AppBadRequestException(
+        ErrorCode.SUBSCRIPTION_NO_STRIPE_SUBSCRIPTION,
         'Keine aktive Stripe Subscription für diese Organisation gefunden',
       );
     }
@@ -459,7 +474,8 @@ export class OrganizationsController {
     const subscription =
       await this.subscriptionsService.findByOrganization(organizationId);
     if (!subscription.stripeCustomerId) {
-      throw new BadRequestException(
+      throw new AppBadRequestException(
+        ErrorCode.SUBSCRIPTION_NO_STRIPE_CUSTOMER,
         'Diese Organisation hat noch keinen Stripe-Customer (Lieutenant/Free Tier)',
       );
     }
@@ -481,7 +497,10 @@ export class OrganizationsController {
     @CurrentOrganization() userOrgId?: string,
   ) {
     if (user.role !== UserRole.ADMINISTRATOR && id !== userOrgId) {
-      throw new ForbiddenException('You can only view your own organization');
+      throw new AppForbiddenException(
+        ErrorCode.ORG_VIEW_FORBIDDEN,
+        'You can only view your own organization',
+      );
     }
     return this.organizationsService.findOne(id);
   }

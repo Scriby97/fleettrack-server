@@ -1,11 +1,11 @@
-import {
-  Injectable,
-  InternalServerErrorException,
-  Logger,
-} from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
 import { SubscriptionTier } from '../organizations/enums/subscription-tier.enum';
+import {
+  AppInternalServerErrorException,
+  ErrorCode,
+} from '../common/exceptions';
 
 @Injectable()
 export class StripeService {
@@ -19,7 +19,8 @@ export class StripeService {
 
   private getClientOrThrow(): Stripe {
     if (!this.stripe) {
-      throw new InternalServerErrorException(
+      throw new AppInternalServerErrorException(
+        ErrorCode.INTERNAL_ERROR_GENERIC,
         'Stripe ist nicht konfiguriert (STRIPE_SECRET_KEY fehlt)',
       );
     }
@@ -33,7 +34,8 @@ export class StripeService {
         : 'STRIPE_PRICE_GENERAL';
     const priceId = this.configService.get<string>(envKey);
     if (!priceId) {
-      throw new InternalServerErrorException(
+      throw new AppInternalServerErrorException(
+        ErrorCode.INTERNAL_ERROR_GENERIC,
         `Stripe Preis für Tier "${tier}" ist nicht konfiguriert (${envKey} fehlt)`,
       );
     }
@@ -123,7 +125,8 @@ export class StripeService {
     );
 
     if (!session.url) {
-      throw new InternalServerErrorException(
+      throw new AppInternalServerErrorException(
+        ErrorCode.SUBSCRIPTION_CHECKOUT_CREATE_FAILED,
         'Stripe Checkout Session konnte nicht erstellt werden',
       );
     }
@@ -193,7 +196,8 @@ export class StripeService {
     );
 
     if (!session.url) {
-      throw new InternalServerErrorException(
+      throw new AppInternalServerErrorException(
+        ErrorCode.SUBSCRIPTION_CHECKOUT_CREATE_FAILED,
         'Stripe Checkout Session konnte nicht erstellt werden',
       );
     }
@@ -242,7 +246,8 @@ export class StripeService {
     );
     const currentItem = subscription.items.data[0];
     if (!currentItem) {
-      throw new InternalServerErrorException(
+      throw new AppInternalServerErrorException(
+        ErrorCode.SUBSCRIPTION_TIER_CHANGE_FAILED,
         `Stripe Subscription ${params.stripeSubscriptionId} hat kein Subscription-Item`,
       );
     }
@@ -277,7 +282,8 @@ export class StripeService {
       'STRIPE_WEBHOOK_SECRET',
     );
     if (!webhookSecret) {
-      throw new InternalServerErrorException(
+      throw new AppInternalServerErrorException(
+        ErrorCode.INTERNAL_ERROR_GENERIC,
         'Stripe Webhook Secret ist nicht konfiguriert (STRIPE_WEBHOOK_SECRET fehlt)',
       );
     }

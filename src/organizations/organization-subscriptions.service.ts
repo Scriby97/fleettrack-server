@@ -1,7 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { OrganizationSubscriptionEntity } from './organization-subscription.entity';
+import { AppNotFoundException, ErrorCode } from '../common/exceptions';
 import {
   SubscriptionTier,
   SubscriptionStatus,
@@ -26,7 +27,8 @@ export class OrganizationSubscriptionsService {
     });
 
     if (!subscription) {
-      throw new NotFoundException(
+      throw new AppNotFoundException(
+        ErrorCode.SUBSCRIPTION_NOT_FOUND,
         'No subscription found for this organization',
       );
     }

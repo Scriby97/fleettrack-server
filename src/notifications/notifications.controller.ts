@@ -6,7 +6,6 @@ import {
   Delete,
   Body,
   Query,
-  BadRequestException,
   UseGuards,
 } from '@nestjs/common';
 import { NotificationsService } from './notifications.service';
@@ -16,6 +15,7 @@ import { SupabaseAuthGuard } from '../auth/guards/supabase-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthUser } from '../auth/decorators/current-user.decorator';
+import { AppBadRequestException, ErrorCode } from '../common/exceptions';
 
 @Controller('notifications')
 @UseGuards(SupabaseAuthGuard, RolesGuard)
@@ -51,7 +51,10 @@ export class NotificationsController {
     @Query('endpoint') endpoint?: string,
   ) {
     if (!endpoint) {
-      throw new BadRequestException('endpoint ist erforderlich');
+      throw new AppBadRequestException(
+        ErrorCode.VALIDATION_BAD_REQUEST_GENERIC,
+        'endpoint ist erforderlich',
+      );
     }
     await this.notificationsService.removeSubscription(user.id, endpoint);
     return { message: 'Subscription entfernt' };

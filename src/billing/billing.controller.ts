@@ -1,11 +1,4 @@
-import {
-  Controller,
-  Post,
-  Req,
-  Headers,
-  BadRequestException,
-  Logger,
-} from '@nestjs/common';
+import { Controller, Post, Req, Headers, Logger } from '@nestjs/common';
 import type { Request } from 'express';
 import type Stripe from 'stripe';
 import { StripeService } from './stripe.service';
@@ -13,6 +6,7 @@ import { OrganizationSubscriptionsService } from '../organizations/organization-
 import { OrganizationsService } from '../organizations/organizations.service';
 import { SubscriptionTier } from '../organizations/enums/subscription-tier.enum';
 import { Public } from '../auth/decorators/public.decorator';
+import { AppBadRequestException, ErrorCode } from '../common/exceptions';
 
 @Controller('billing')
 export class BillingController {
@@ -36,12 +30,18 @@ export class BillingController {
     @Headers('stripe-signature') signature: string,
   ) {
     if (!signature) {
-      throw new BadRequestException('Fehlende Stripe-Signatur');
+      throw new AppBadRequestException(
+        ErrorCode.VALIDATION_BAD_REQUEST_GENERIC,
+        'Fehlende Stripe-Signatur',
+      );
     }
 
     const rawBody = (req as Request & { rawBody?: Buffer }).rawBody;
     if (!rawBody) {
-      throw new BadRequestException('Raw Body nicht verfügbar');
+      throw new AppBadRequestException(
+        ErrorCode.VALIDATION_BAD_REQUEST_GENERIC,
+        'Raw Body nicht verfügbar',
+      );
     }
 
     const event = this.stripeService.constructEvent(rawBody, signature);

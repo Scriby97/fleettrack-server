@@ -1,12 +1,4 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Body,
-  Param,
-  BadRequestException,
-  Logger,
-} from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Logger } from '@nestjs/common';
 import { OrganizationsInvitesService } from './organizations-invites.service';
 import { AcceptInviteDto } from './dto/accept-invite.dto';
 import { AuthService } from '../auth/auth.service';
@@ -14,6 +6,7 @@ import { Public } from '../auth/decorators/public.decorator';
 import { UserRole } from '../auth/enums/user-role.enum';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthUser } from '../auth/decorators/current-user.decorator';
+import { AppBadRequestException, ErrorCode } from '../common/exceptions';
 
 @Controller('invites')
 export class InvitesController {
@@ -118,7 +111,8 @@ export class InvitesController {
       this.logger.warn(
         `Email mismatch: Invite=${invite.email}, Request=${acceptInviteDto.email}`,
       );
-      throw new BadRequestException(
+      throw new AppBadRequestException(
+        ErrorCode.INVITE_ACCEPT_EMAIL_MISMATCH,
         'Email does not match the invited email address',
       );
     }

@@ -1,9 +1,14 @@
-import { Injectable, UnauthorizedException, ForbiddenException, Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { SupabaseService } from '../supabase/supabase.service';
 import { UserProfileEntity } from './entities/user-profile.entity';
 import { UserRole } from './enums/user-role.enum';
+import {
+  AppForbiddenException,
+  AppUnauthorizedException,
+  ErrorCode,
+} from '../common/exceptions';
 
 @Injectable()
 export class AuthService {
@@ -15,33 +20,77 @@ export class AuthService {
   ) {}
 
   /**
-   * Übersetzt Supabase-Fehlermeldungen ins Deutsche
+   * Übersetzt Supabase-SDK-Fehlermeldungen (immer Englisch) in einen unserer
+   * ErrorCodes + eine deutsche Fallback-Message. Das Frontend übersetzt den
+   * Code anhand der aktuellen UI-Sprache; ist kein Code bekannt, dient die
+   * rohe (englische) Supabase-Message als letzter Fallback - sinnvoller als
+   * hartes Deutsch, falls Supabase mal eine unbekannte Meldung liefert.
    */
-  private translateSupabaseError(errorMessage: string): string {
-    const errorTranslations: { [key: string]: string } = {
-      'Email not confirmed': 'E-Mail-Adresse wurde noch nicht bestätigt. Bitte überprüfen Sie Ihr Postfach.',
-      'Invalid login credentials': 'Ungültige Anmeldedaten. Bitte überprüfen Sie E-Mail und Passwort.',
-      'User already registered': 'Benutzer ist bereits registriert.',
-      'Password should be at least 6 characters': 'Das Passwort muss mindestens 6 Zeichen lang sein.',
-      'Unable to validate email address': 'E-Mail-Adresse konnte nicht validiert werden.',
-      'Invalid email': 'Ungültige E-Mail-Adresse.',
-      'Signup requires a valid password': 'Registrierung erfordert ein gültiges Passwort.',
-      'Invalid Refresh Token': 'Ungültiger Refresh-Token. Bitte melden Sie sich erneut an.',
-      'User not found': 'Benutzer nicht gefunden.',
-      'Email rate limit exceeded': 'Zu viele E-Mail-Anfragen. Bitte versuchen Sie es später erneut.',
-      'Invalid token': 'Ungültiger Token.',
-      'Token has expired': 'Token ist abgelaufen. Bitte melden Sie sich erneut an.',
+  private translateSupabaseError(errorMessage: string): {
+    code: ErrorCode;
+    message: string;
+  } {
+    const errorTranslations: { [key: string]: { code: ErrorCode; message: string } } = {
+      'Email not confirmed': {
+        code: ErrorCode.AUTH_EMAIL_NOT_CONFIRMED,
+        message: 'E-Mail-Adresse wurde noch nicht bestätigt. Bitte überprüfen Sie Ihr Postfach.',
+      },
+      'Invalid login credentials': {
+        code: ErrorCode.AUTH_INVALID_CREDENTIALS,
+        message: 'Ungültige Anmeldedaten. Bitte überprüfen Sie E-Mail und Passwort.',
+      },
+      'User already registered': {
+        code: ErrorCode.AUTH_USER_ALREADY_REGISTERED,
+        message: 'Benutzer ist bereits registriert.',
+      },
+      'Password should be at least 6 characters': {
+        code: ErrorCode.AUTH_PASSWORD_TOO_SHORT,
+        message: 'Das Passwort muss mindestens 6 Zeichen lang sein.',
+      },
+      'Unable to validate email address': {
+        code: ErrorCode.AUTH_INVALID_EMAIL,
+        message: 'E-Mail-Adresse konnte nicht validiert werden.',
+      },
+      'Invalid email': {
+        code: ErrorCode.AUTH_INVALID_EMAIL,
+        message: 'Ungültige E-Mail-Adresse.',
+      },
+      'Signup requires a valid password': {
+        code: ErrorCode.AUTH_SIGNUP_INVALID_PASSWORD,
+        message: 'Registrierung erfordert ein gültiges Passwort.',
+      },
+      'Invalid Refresh Token': {
+        code: ErrorCode.AUTH_REFRESH_TOKEN_INVALID,
+        message: 'Ungültiger Refresh-Token. Bitte melden Sie sich erneut an.',
+      },
+      'User not found': {
+        code: ErrorCode.AUTH_USER_NOT_FOUND,
+        message: 'Benutzer nicht gefunden.',
+      },
+      'Email rate limit exceeded': {
+        code: ErrorCode.AUTH_EMAIL_RATE_LIMIT,
+        message: 'Zu viele E-Mail-Anfragen. Bitte versuchen Sie es später erneut.',
+      },
+      'Invalid token': {
+        code: ErrorCode.AUTH_TOKEN_INVALID,
+        message: 'Ungültiger Token.',
+      },
+      'Token has expired': {
+        code: ErrorCode.AUTH_TOKEN_EXPIRED,
+        message: 'Token ist abgelaufen. Bitte melden Sie sich erneut an.',
+      },
     };
 
-    // Suche nach passender Übersetzung
-    for (const [englishError, germanError] of Object.entries(errorTranslations)) {
+    // Suche nach passendem Code (Supabase-Message enthält den Schlüssel als Substring)
+    for (const [englishError, translation] of Object.entries(errorTranslations)) {
       if (errorMessage.includes(englishError)) {
-        return germanError;
+        return translation;
       }
     }
 
-    // Falls keine Übersetzung gefunden wurde, gebe die Original-Nachricht zurück
-    return errorMessage;
+    // Falls kein bekannter Fehler gefunden wurde, gebe die Original-Nachricht
+    // (Englisch, von Supabase) als Fallback zurück - Verhalten wie zuvor.
+    return { code: ErrorCode.AUTH_GENERIC_ERROR, message: errorMessage };
   }
 
   private getResetPasswordRedirectUrl(): string | undefined {
@@ -70,7 +119,8 @@ export class AuthService {
     });
 
     if (error) {
-      throw new UnauthorizedException(this.translateSupabaseError(error.message));
+      const translated = this.translateSupabaseError(error.message);
+      throw new AppUnauthorizedException(translated.code, translated.message);
     }
 
     // Hole User-Profile mit globaler Rolle
@@ -104,7 +154,8 @@ export class AuthService {
     });
     
     if (existingProfile) {
-      throw new UnauthorizedException(
+      throw new AppUnauthorizedException(
+        ErrorCode.AUTH_USER_ALREADY_REGISTERED,
         'Ein Benutzer mit dieser E-Mail-Adresse existiert bereits. Bitte verwenden Sie eine andere E-Mail oder kontaktieren Sie den Support.',
       );
     }
@@ -123,7 +174,8 @@ export class AuthService {
     });
 
     if (error) {
-      throw new UnauthorizedException(this.translateSupabaseError(error.message));
+      const translated = this.translateSupabaseError(error.message);
+      throw new AppUnauthorizedException(translated.code, translated.message);
     }
 
     // Erstelle User-Profile in lokaler DB
@@ -156,7 +208,8 @@ export class AuthService {
     });
 
     if (error) {
-      throw new UnauthorizedException(this.translateSupabaseError(error.message));
+      const translated = this.translateSupabaseError(error.message);
+      throw new AppUnauthorizedException(translated.code, translated.message);
     }
 
     return {
@@ -173,7 +226,8 @@ export class AuthService {
     const { error } = await supabase.auth.signOut();
 
     if (error) {
-      throw new UnauthorizedException(this.translateSupabaseError(error.message));
+      const translated = this.translateSupabaseError(error.message);
+      throw new AppUnauthorizedException(translated.code, translated.message);
     }
 
     return { message: 'Erfolgreich abgemeldet' };
@@ -190,7 +244,8 @@ export class AuthService {
     const { error } = await supabase.auth.resetPasswordForEmail(email, options);
 
     if (error) {
-      throw new UnauthorizedException(this.translateSupabaseError(error.message));
+      const translated = this.translateSupabaseError(error.message);
+      throw new AppUnauthorizedException(translated.code, translated.message);
     }
 
     return { message: 'Passwort-Reset Email versendet' };
@@ -207,12 +262,18 @@ export class AuthService {
     const targetProfile = await this.profileRepo.findOne({ where: { id: userId } });
 
     if (!targetProfile) {
-      throw new UnauthorizedException('User nicht gefunden');
+      throw new AppUnauthorizedException(
+        ErrorCode.AUTH_USER_NOT_FOUND,
+        'User nicht gefunden',
+      );
     }
 
     // Nur Administratoren dürfen Password-Resets initiieren
     if (requesterRole !== UserRole.ADMINISTRATOR) {
-      throw new ForbiddenException('Nur Administratoren dürfen Passwort-Resets durchführen');
+      throw new AppForbiddenException(
+        ErrorCode.AUTH_RESET_PASSWORD_FORBIDDEN,
+        'Nur Administratoren dürfen Passwort-Resets durchführen',
+      );
     }
 
     const supabase = this.supabaseService.getClient();
@@ -225,7 +286,8 @@ export class AuthService {
     );
 
     if (error) {
-      throw new UnauthorizedException(this.translateSupabaseError(error.message));
+      const translated = this.translateSupabaseError(error.message);
+      throw new AppUnauthorizedException(translated.code, translated.message);
     }
 
     return { message: 'Passwort-Reset Email versendet' };
@@ -236,7 +298,10 @@ export class AuthService {
    */
   async updatePassword(userId: string, newPassword: string) {
     if (!userId) {
-      throw new UnauthorizedException('Kein gültiger Benutzer');
+      throw new AppUnauthorizedException(
+        ErrorCode.AUTH_INVALID_USER,
+        'Kein gültiger Benutzer',
+      );
     }
 
     const adminSupabase = this.supabaseService.getAdminClient();
@@ -246,7 +311,8 @@ export class AuthService {
 
     if (error) {
       this.logger.error(`Supabase admin update failed: ${JSON.stringify(error)}`);
-      throw new UnauthorizedException(this.translateSupabaseError(error.message));
+      const translated = this.translateSupabaseError(error.message);
+      throw new AppUnauthorizedException(translated.code, translated.message);
     }
 
     return { message: 'Passwort erfolgreich aktualisiert' };
@@ -260,7 +326,10 @@ export class AuthService {
     const profile = await this.profileRepo.findOne({ where: { id: userId } });
 
     if (!profile) {
-      throw new UnauthorizedException('User nicht gefunden');
+      throw new AppUnauthorizedException(
+        ErrorCode.AUTH_USER_NOT_FOUND,
+        'User nicht gefunden',
+      );
     }
 
     profile.role = newRole;

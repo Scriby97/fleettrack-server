@@ -1,13 +1,9 @@
-import {
-  Injectable,
-  CanActivate,
-  ExecutionContext,
-  ForbiddenException,
-} from '@nestjs/common';
+import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { UserRole } from '../enums/user-role.enum';
 import { OrganizationMemberEntity } from '../../organizations/organization-member.entity';
+import { AppForbiddenException, ErrorCode } from '../../common/exceptions';
 
 /**
  * Guard to ensure users only access organizations they belong to
@@ -26,7 +22,10 @@ export class OrganizationGuard implements CanActivate {
     const organizationId = request.params.organizationId || request.body?.organizationId;
 
     if (!user) {
-      throw new ForbiddenException('User not authenticated');
+      throw new AppForbiddenException(
+        ErrorCode.AUTH_FORBIDDEN_GENERIC,
+        'User not authenticated',
+      );
     }
 
     // Administrators have access to all organizations
@@ -37,7 +36,10 @@ export class OrganizationGuard implements CanActivate {
     // Normal users need to be members of the organization
     if (user.role === UserRole.USER) {
       if (!organizationId) {
-        throw new ForbiddenException('Organization ID is required');
+        throw new AppForbiddenException(
+          ErrorCode.VALIDATION_BAD_REQUEST_GENERIC,
+          'Organization ID is required',
+        );
       }
 
       const membership = await this.memberRepo.findOne({
@@ -48,7 +50,8 @@ export class OrganizationGuard implements CanActivate {
       });
 
       if (!membership) {
-        throw new ForbiddenException(
+        throw new AppForbiddenException(
+          ErrorCode.AUTH_FORBIDDEN_GENERIC,
           'User is not a member of this organization',
         );
       }
@@ -58,6 +61,9 @@ export class OrganizationGuard implements CanActivate {
       return true;
     }
 
-    throw new ForbiddenException('Invalid user role');
+    throw new AppForbiddenException(
+      ErrorCode.AUTH_FORBIDDEN_GENERIC,
+      'Invalid user role',
+    );
   }
 }
