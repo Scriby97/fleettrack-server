@@ -146,28 +146,16 @@ export class OrganizationsInvitesService {
   }
 
   /**
-   * Markiert einen Invite als verwendet
+   * Loescht eine eingeloeste Einladung. Eingeloeste Einladungen muessen
+   * nicht mehr aufgelistet werden - statt sie wie frueher nur mit
+   * usedAt/usedBy zu markieren, wird die Zeile direkt entfernt, sobald die
+   * zugehoerige Mitgliedschaft erfolgreich angelegt wurde (daher IMMER erst
+   * NACH createMembership aufrufen - schlaegt die Mitgliedschaft fehl,
+   * bleibt die Einladung so noch gueltig und der Link nochmal nutzbar).
    */
-  async markInviteAsUsed(
-    token: string,
-    userId: string,
-  ): Promise<OrganizationInviteEntity> {
-    this.logger.debug(
-      `markInviteAsUsed called with token=${token.substring(0, 20)}...`,
-    );
-
-    const invite = await this.validateInvite(token);
-    this.logger.debug(`Invite before update: id=${invite.id}`);
-
-    invite.usedAt = new Date();
-    invite.usedBy = userId;
-
-    const saved = await this.inviteRepository.save(invite);
-    this.logger.debug(
-      `Invite after save: id=${saved.id}, usedAt=${saved.usedAt}`,
-    );
-
-    return saved;
+  async deleteConsumedInvite(invite: OrganizationInviteEntity): Promise<void> {
+    await this.inviteRepository.remove(invite);
+    this.logger.debug(`Eingeloeste Einladung geloescht: id=${invite.id}`);
   }
 
   /**
@@ -241,8 +229,13 @@ export class OrganizationsInvitesService {
       );
     }
 
-    await this.markInviteAsUsed(token, userId);
-    return this.createMembership(userId, invite.organizationId, invite.role);
+    const membership = await this.createMembership(
+      userId,
+      invite.organizationId,
+      invite.role,
+    );
+    await this.deleteConsumedInvite(invite);
+    return membership;
   }
 
   /**

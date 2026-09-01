@@ -130,14 +130,7 @@ export class InvitesController {
     );
     this.logger.log(`User created: ${result.user?.id}`);
 
-    // Markiere Invite als verwendet
     if (result.user) {
-      await this.invitesService.markInviteAsUsed(
-        acceptInviteDto.token,
-        result.user.id,
-      );
-      this.logger.log(`Invite marked as used`);
-
       // Erstelle organization_members Eintrag mit der Rolle aus dem Invite
       await this.invitesService.createMembership(
         result.user.id,
@@ -147,9 +140,16 @@ export class InvitesController {
       this.logger.log(
         `Organization membership created with role: ${invite.role}`,
       );
+
+      // Einladung ist jetzt eingeloest - loeschen statt nur markieren
+      // (eingeloeste Einladungen muessen nicht mehr aufgelistet werden).
+      // Erst NACH erfolgreicher Mitgliedschaft, damit der Link bei einem
+      // Fehler mittendrin noch gueltig bleibt.
+      await this.invitesService.deleteConsumedInvite(invite);
+      this.logger.log(`Invite deleted after use`);
     } else {
       this.logger.error(
-        `result.user is null/undefined - invite will NOT be marked as used`,
+        `result.user is null/undefined - invite will NOT be deleted`,
       );
     }
 
