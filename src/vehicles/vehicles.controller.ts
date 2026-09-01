@@ -83,14 +83,39 @@ export class VehiclesController {
    * GET /vehicles/stats
    * Fahrzeug-Statistiken abrufen (benötigt Auth)
    * Administratoren können optional ?organizationId=... übergeben, um eine bestimmte Organisation zu filtern
+   * Optional ?startDate=...&endDate=... (ISO-Datetime) fuer eine Zeitraum-Filterung
+   * nach usageDate - werden nur zusammen akzeptiert, nicht einzeln
    */
   @Get('stats')
   async getStats(
     @CurrentUser() user: AuthUser,
     @Query('organizationId') queryOrgId?: string,
+    @Query('startDate') startDateParam?: string,
+    @Query('endDate') endDateParam?: string,
   ) {
     const organizationIds = await this.resolveOrganizationIds(user, queryOrgId);
-    return this.vehiclesService.stats(organizationIds);
+
+    if (Boolean(startDateParam) !== Boolean(endDateParam)) {
+      throw new AppBadRequestException(
+        ErrorCode.VALIDATION_BAD_REQUEST_GENERIC,
+        'startDate and endDate must be provided together',
+      );
+    }
+
+    let startDate: Date | undefined;
+    let endDate: Date | undefined;
+    if (startDateParam && endDateParam) {
+      startDate = new Date(startDateParam);
+      endDate = new Date(endDateParam);
+      if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+        throw new AppBadRequestException(
+          ErrorCode.VALIDATION_BAD_REQUEST_GENERIC,
+          'startDate/endDate must be valid dates',
+        );
+      }
+    }
+
+    return this.vehiclesService.stats(organizationIds, startDate, endDate);
   }
 
   /**

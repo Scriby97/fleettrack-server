@@ -24,7 +24,11 @@ export interface VehicleStats {
   fuelType?: string;
   notes?: string;
   organizationId: string;
-  totalWorkHours: number; // hours
+  // Betriebsstunden der chronologisch ersten/letzten Nutzung im
+  // angefragten Zeitraum (nach usageDate, nicht creationDate) - null,
+  // wenn das Fahrzeug im Zeitraum keine Nutzung hat.
+  periodStartHours: number | null;
+  periodEndHours: number | null;
   totalFuelLiters: number;
 }
 
@@ -87,20 +91,42 @@ export class VehiclesService {
   }
 
   /**
-   * Return vehicles with aggregated stats from usages:
-   * - totalWorkHours: sum of (endTime - startTime) in hours
-   * - totalFuelLiters: sum of fuelLitersRefilled
+   * Return vehicles with aggregated stats from usages, optional auf einen
+   * Zeitraum eingeschraenkt (nach usageDate - dem Erfassungsdatum der
+   * Nutzung, NICHT creationDate, das erst spaeter/nachtraeglich passiert
+   * sein kann):
+   * - periodStartHours/periodEndHours: startOperatingHours der chronologisch
+   *   ersten bzw. endOperatingHours der chronologisch letzten Nutzung im
+   *   Zeitraum (null, falls keine Nutzung im Zeitraum)
+   * - totalFuelLiters: Summe fuelLitersRefilled im Zeitraum
+   *
+   * Die Zeitraum-Bedingung sitzt bewusst im JOIN (nicht in WHERE), damit
+   * Fahrzeuge ohne Nutzung im Zeitraum trotzdem in der Ergebnisliste
+   * bleiben (nur mit leeren Werten), statt ganz zu verschwinden.
    */
-  async stats(organizationIds?: string[]): Promise<VehicleStats[]> {
+  async stats(
+    organizationIds?: string[],
+    startDate?: Date,
+    endDate?: Date,
+  ): Promise<VehicleStats[]> {
     if (organizationIds && organizationIds.length === 0) {
       return [];
     }
 
     // Query vehicles left-joined with usages and aggregate
     try {
+      let joinCondition = 'u.vehicleId = v.id';
+      const joinParams: Record<string, Date> = {};
+      if (startDate && endDate) {
+        joinCondition +=
+          ' AND u.usageDate >= :statsStartDate AND u.usageDate <= :statsEndDate';
+        joinParams.statsStartDate = startDate;
+        joinParams.statsEndDate = endDate;
+      }
+
       const qb = this.repo
         .createQueryBuilder('v')
-        .leftJoin(UsageEntity, 'u', 'u.vehicleId = v.id')
+        .leftJoin(UsageEntity, 'u', joinCondition, joinParams)
         .select([
           'v.id as id',
           'v.name as name',
@@ -112,7 +138,8 @@ export class VehiclesService {
           'v.fuelType as "fuelType"',
           'v.notes as notes',
           'v.organizationId as "organizationId"',
-          'COALESCE(SUM(u.endOperatingHours - u.startOperatingHours), 0) as "totalWorkHours"',
+          '(ARRAY_AGG(u.startOperatingHours ORDER BY u.usageDate ASC))[1] as "periodStartHours"',
+          '(ARRAY_AGG(u.endOperatingHours ORDER BY u.usageDate DESC))[1] as "periodEndHours"',
           'COALESCE(SUM(u.fuelLitersRefilled), 0) as "totalFuelLiters"',
         ])
         .groupBy(
@@ -149,7 +176,14 @@ export class VehiclesService {
         fuelType: r.fuelType ?? null,
         notes: r.notes ?? null,
         organizationId: r.organizationId,
-        totalWorkHours: Number(r.totalWorkHours) || 0,
+        periodStartHours:
+          r.periodStartHours === null || r.periodStartHours === undefined
+            ? null
+            : Number(r.periodStartHours),
+        periodEndHours:
+          r.periodEndHours === null || r.periodEndHours === undefined
+            ? null
+            : Number(r.periodEndHours),
         totalFuelLiters: Number(r.totalFuelLiters) || 0,
       }));
     } catch (err) {
