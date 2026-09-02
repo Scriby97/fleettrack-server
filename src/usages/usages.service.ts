@@ -95,6 +95,11 @@ export class UsagesService {
         id: usage.creator.id,
         firstName: usage.creator.firstName,
         lastName: usage.creator.lastName,
+        // Fallback fuers Frontend, falls Vor-/Nachname fehlen (z.B. Accounts,
+        // die vor der Vorname/Nachname-Pflicht bei der Registrierung
+        // angelegt wurden - dort war frueher nur ein einzelnes "Name"-Feld
+        // vorhanden, das gar nicht gespeichert wurde).
+        email: usage.creator.email,
       },
     }));
   }
