@@ -11,6 +11,7 @@ import { OrganizationMemberEntity } from './organization-member.entity';
 import { OrganizationSubscriptionEntity } from './organization-subscription.entity';
 import { OrganizationInviteEntity } from './entities/organization-invite.entity';
 import { UserProfileEntity } from '../auth/entities/user-profile.entity';
+import { VehicleEntity } from '../vehicles/vehicle.entity';
 import { AuthModule } from '../auth/auth.module';
 import { OrganizationGuard } from '../auth/guards/organization.guard';
 import { OrganizationRolesGuard } from '../auth/guards/organization-roles.guard';
@@ -24,6 +25,11 @@ import { BillingModule } from '../billing/billing.module';
       OrganizationSubscriptionEntity,
       OrganizationInviteEntity,
       UserProfileEntity,
+      // Nur fuer die Fahrzeug-Anzahl beim Free-Limit-Check in
+      // OrganizationSubscriptionsService (siehe getOverLieutenantLimitStatus) -
+      // kein voller Vehicles-Feature-Import noetig, VehiclesService/-Controller
+      // bleiben in AppModule.
+      VehicleEntity,
     ]),
     AuthModule,
     forwardRef(() => BillingModule),

@@ -201,6 +201,20 @@ export class OrganizationMembersService {
     await this.memberRepository.remove(member);
   }
 
+  /**
+   * Trennt ALLE Mitgliedschaften einer Organisation auf einmal (inkl. Owner) -
+   * für den Fall, dass eine Organisation über dem kostenlosen Lieutenant-Limit
+   * (Fahrzeuge oder Mitarbeiter) liegt und ihr bezahltes Abo endet (siehe
+   * OrganizationSubscriptionsService.downgradeToFree). Löscht bewusst NUR die
+   * organization_members-Zeilen (die Verbindung User<->Organisation) - keine
+   * Fahrzeuge, Nutzungen oder die Organisation selbst. Alle Daten bleiben
+   * erhalten, nur der Zugriff der User geht verloren. Umgeht bewusst
+   * assertNotLastOwner(), da hier explizit ALLE Mitglieder getrennt werden sollen.
+   */
+  async removeAllMembers(organizationId: string): Promise<void> {
+    await this.memberRepository.delete({ organizationId });
+  }
+
   private async findMemberOrThrow(
     organizationId: string,
     memberId: string,

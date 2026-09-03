@@ -386,11 +386,17 @@ export class OrganizationsController {
   async getOrganizationSubscription(
     @Param('organizationId') organizationId: string,
   ) {
-    const subscription =
-      await this.subscriptionsService.findByOrganization(organizationId);
+    const [subscription, freeLimitStatus] = await Promise.all([
+      this.subscriptionsService.findByOrganization(organizationId),
+      this.subscriptionsService.getFreeLimitStatus(organizationId),
+    ]);
     return {
       ...subscription,
       limits: SUBSCRIPTION_LIMITS[subscription.tier],
+      // Fuers Frontend: Warnung vor dem Kuendigen anzeigen, wenn die Organisation
+      // mehr aktive Fahrzeuge/Mitarbeiter hat, als der kostenlose Lieutenant-Tarif
+      // erlaubt (siehe OrganizationSubscriptionsService.downgradeToFree).
+      overLieutenantLimit: freeLimitStatus.overLimit,
     };
   }
 

@@ -1,7 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { OrganizationSubscriptionEntity } from './organization-subscription.entity';
+import { OrganizationMembersService } from './organization-members.service';
+import { VehicleEntity } from '../vehicles/vehicle.entity';
 import { AppNotFoundException, ErrorCode } from '../common/exceptions';
 import {
   SubscriptionTier,
@@ -12,11 +14,22 @@ import {
   SubscriptionLimits,
 } from './constants/subscription-limits.constant';
 
+export interface FreeLimitStatus {
+  overLimit: boolean;
+  vehicleCount: number;
+  memberCount: number;
+}
+
 @Injectable()
 export class OrganizationSubscriptionsService {
+  private readonly logger = new Logger(OrganizationSubscriptionsService.name);
+
   constructor(
     @InjectRepository(OrganizationSubscriptionEntity)
     private readonly subscriptionRepository: Repository<OrganizationSubscriptionEntity>,
+    @InjectRepository(VehicleEntity)
+    private readonly vehicleRepository: Repository<VehicleEntity>,
+    private readonly membersService: OrganizationMembersService,
   ) {}
 
   async findByOrganization(
@@ -170,6 +183,15 @@ export class OrganizationSubscriptionsService {
    * (für ein späteres Re-Upgrade legt createCheckoutSession bei Bedarf ohnehin eine
    * neue Subscription an; TypeORM würde ein explizites `undefined` beim Löschen
    * still ignorieren statt NULL zu speichern, daher hier bewusst nicht geleert).
+   *
+   * Liegt die Organisation zu diesem Zeitpunkt über dem kostenlosen
+   * Lieutenant-Limit (mehr aktive Fahrzeuge oder Mitarbeiter als erlaubt),
+   * werden zusätzlich ALLE Mitgliedschaften getrennt (siehe removeAllMembers) -
+   * die Organisation und alle ihre Daten bleiben dabei vollständig erhalten,
+   * nur der Zugriff der User geht verloren. Der Live-Check hier (statt zum
+   * Zeitpunkt der Kündigung) ist bewusst: reduziert der Owner die Anzahl vor
+   * Ablauf der Abrechnungsperiode selbst wieder unters Limit (z.B. Fahrzeuge
+   * ausrangieren), bleibt die Organisation verbunden.
    */
   async downgradeToFree(
     organizationId: string,
@@ -178,6 +200,43 @@ export class OrganizationSubscriptionsService {
     subscription.tier = SubscriptionTier.LIEUTENANT;
     subscription.status = SubscriptionStatus.ACTIVE;
     subscription.canceledAt = new Date();
-    return this.subscriptionRepository.save(subscription);
+    const saved = await this.subscriptionRepository.save(subscription);
+
+    const limitStatus = await this.getFreeLimitStatus(organizationId);
+    if (limitStatus.overLimit) {
+      await this.membersService.removeAllMembers(organizationId);
+      this.logger.warn(
+        `Organisation ${organizationId} lag beim Downgrade auf Lieutenant über dem Free-Limit ` +
+          `(Fahrzeuge=${limitStatus.vehicleCount}, Mitarbeiter=${limitStatus.memberCount}) - ` +
+          `alle Mitgliedschaften getrennt, Daten bleiben erhalten.`,
+      );
+    }
+
+    return saved;
+  }
+
+  /**
+   * Prüft, ob eine Organisation aktuell mehr aktive Fahrzeuge oder Mitarbeiter
+   * hat, als der kostenlose Lieutenant-Tarif erlaubt - fürs Frontend (Warnung
+   * vor dem Kündigen) und für downgradeToFree() (tatsächliche Durchsetzung).
+   * Ausrangierte Fahrzeuge zählen bewusst nicht mit (siehe VehiclesService.countActive).
+   */
+  async getFreeLimitStatus(organizationId: string): Promise<FreeLimitStatus> {
+    const lieutenantLimits = SUBSCRIPTION_LIMITS[SubscriptionTier.LIEUTENANT];
+
+    const [vehicleCount, memberCount] = await Promise.all([
+      this.vehicleRepository.count({
+        where: { organizationId, isRetired: false },
+      }),
+      this.membersService.countByOrganization(organizationId),
+    ]);
+
+    const overLimit =
+      (lieutenantLimits.maxVehicles !== null &&
+        vehicleCount > lieutenantLimits.maxVehicles) ||
+      (lieutenantLimits.maxMembers !== null &&
+        memberCount > lieutenantLimits.maxMembers);
+
+    return { overLimit, vehicleCount, memberCount };
   }
 }
