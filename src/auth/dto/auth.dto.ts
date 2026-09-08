@@ -40,12 +40,6 @@ export class ResetPasswordDto {
   email: string;
 }
 
-export class UpdatePasswordDto {
-  @IsString()
-  @MinLength(6)
-  new_password: string;
-}
-
 export class UpdateUserRoleDto {
   @IsEnum(UserRole)
   role: UserRole;

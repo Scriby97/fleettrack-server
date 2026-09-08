@@ -232,14 +232,11 @@ DELETE /organizations/{id}
 - User kann sein Passwort aendern (eingeloggt erforderlich)
 - Formular: `new_password` + `confirm_password`
 
-**API Call:**
+**Umsetzung:** Direkt ueber den Supabase-Client im Browser, kein Backend-Call:
 ```typescript
-POST /auth/update-password
-Authorization: Bearer <access_token>
-Body: {
-  new_password: string
-}
+await supabase.auth.updateUser({ password: new_password })
 ```
+Die aktuelle Session bleibt dabei gueltig.
 
 ### K) Admin User-Reset (in User-Management)
 

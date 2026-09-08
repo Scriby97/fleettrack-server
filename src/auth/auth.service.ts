@@ -294,31 +294,6 @@ export class AuthService {
   }
 
   /**
-   * Passwort aktualisieren
-   */
-  async updatePassword(userId: string, newPassword: string) {
-    if (!userId) {
-      throw new AppUnauthorizedException(
-        ErrorCode.AUTH_INVALID_USER,
-        'Kein gültiger Benutzer',
-      );
-    }
-
-    const adminSupabase = this.supabaseService.getAdminClient();
-    const { error } = await adminSupabase.auth.admin.updateUserById(userId, {
-      password: newPassword,
-    });
-
-    if (error) {
-      this.logger.error(`Supabase admin update failed: ${JSON.stringify(error)}`);
-      const translated = this.translateSupabaseError(error.message);
-      throw new AppUnauthorizedException(translated.code, translated.message);
-    }
-
-    return { message: 'Passwort erfolgreich aktualisiert' };
-  }
-
-  /**
    * User-Rolle ändern (nur für Administratoren)
    * Setzt die globale funktionale Rolle (user oder administrator)
    */

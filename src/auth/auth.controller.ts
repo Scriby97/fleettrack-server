@@ -5,7 +5,6 @@ import {
   SignUpDto,
   RefreshTokenDto,
   ResetPasswordDto,
-  UpdatePasswordDto,
   UpdateUserRoleDto,
 } from './dto/auth.dto';
 import { Public } from './decorators/public.decorator';
@@ -76,18 +75,6 @@ export class AuthController {
   @Post('reset-password')
   resetPassword(@Body() dto: ResetPasswordDto) {
     return this.authService.resetPassword(dto.email);
-  }
-
-  /**
-   * POST /auth/update-password
-   * Passwort ändern (benötigt Auth Token)
-   */
-  @Post('update-password')
-  updatePassword(
-    @CurrentUser() user: AuthUser,
-    @Body() dto: UpdatePasswordDto,
-  ) {
-    return this.authService.updatePassword(user.id, dto.new_password);
   }
 
   /**

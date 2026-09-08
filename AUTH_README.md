@@ -111,18 +111,11 @@ POST /auth/signout
 Authorization: Bearer <access_token>
 ```
 
-#### 7. Passwort ändern
-```http
-POST /auth/update-password
-Authorization: Bearer <access_token>
-Content-Type: application/json
+#### 7. Passwort ändern (eingeloggt)
 
-{
-  "new_password": "newSecurePassword123"
-}
-```
-
-Hinweis: Passwort-Aenderung ist nur moeglich, wenn der User eingeloggt ist.
+Laeuft nicht ueber das Backend. Das Frontend ruft direkt
+`supabase.auth.updateUser({ password })` mit der eigenen Session des Users auf
+(analog zur Reset-Password-Seite).
 
 #### 8. Admin: Passwort-Reset Email an User senden
 ```http

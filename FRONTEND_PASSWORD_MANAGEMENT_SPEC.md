@@ -27,15 +27,13 @@ Frontend-Umsetzung fuer Passwort-Aenderungen (eingeloggte User) und Admin-Reset-
 ## API Endpoints
 
 ### 1) Passwort aendern (eingeloggt)
+
+Kein Backend-Endpoint. Das Frontend ruft direkt den Supabase-Client auf:
 ```
-POST /auth/update-password
-Authorization: Bearer <access_token>
-Body:
-{
-  "new_password": "string"
-}
+await supabase.auth.updateUser({ password: "string" })
 ```
 - Passwort Mindestlaenge: 6
+- Nutzt die eigene Session des Users; diese bleibt danach gueltig.
 
 ### 2) Admin Reset Email an User senden
 ```
@@ -86,7 +84,7 @@ Authorization: Bearer <access_token>
 
 **State/Flow:**
 1. User fuellt Formular aus
-2. POST `/auth/update-password`
+2. `supabase.auth.updateUser({ password })` (Client, kein Backend-Call)
 3. Success Toast + Formular leeren
 
 ### B) Admin User-Management (`/admin/users`)

@@ -124,7 +124,6 @@ POST   /auth/signup                          PUBLIC   Registrierung (email, pass
 POST   /auth/refresh                         PUBLIC   Token erneuern (refresh_token)
 POST   /auth/signout                         AUTH     Logout
 POST   /auth/reset-password                  PUBLIC   Passwort-Reset-Mail (email)
-POST   /auth/update-password                 AUTH     Eigenes Passwort aendern (new_password)
 GET    /auth/me                              AUTH     Eigenes Profil inkl. organizationMemberships (ohne organization-Details, siehe /organizations/mine)
 GET    /auth/users                           ADMIN    Alle User
 PATCH  /auth/users/:userId/role              ADMIN    Globale Rolle aendern (role: 'user'|'administrator')
