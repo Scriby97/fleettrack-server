@@ -90,6 +90,7 @@ export class UsagesService {
         id: usage.vehicle.id,
         name: usage.vehicle.name,
         plate: usage.vehicle.plate,
+        vehicleType: usage.vehicle.vehicleType,
       },
       creator: {
         id: usage.creator.id,
