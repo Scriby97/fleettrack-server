@@ -218,4 +218,41 @@ export class OrganizationsService {
     organization.isActive = false;
     await this.organizationRepository.save(organization);
   }
+
+  /**
+   * Selfservice-Bearbeitung durch den Org-Owner (aktuell nur der Name).
+   * Namens-Kollision (unique constraint, Postgres 23505) wird wie in
+   * createSelfService in einen sprechenden Konflikt-Fehler uebersetzt.
+   */
+  async updateProfile(
+    id: string,
+    dto: { name?: string },
+  ): Promise<OrganizationEntity> {
+    const organization = await this.findOne(id);
+
+    if (dto.name !== undefined) {
+      organization.name = dto.name.trim();
+    }
+
+    try {
+      return await this.organizationRepository.save(organization);
+    } catch (error) {
+      if ((error as { code?: string }).code === '23505') {
+        throw new AppConflictException(
+          ErrorCode.ORG_NAME_TAKEN,
+          'Eine Organisation mit diesem Namen existiert bereits',
+        );
+      }
+      throw error;
+    }
+  }
+
+  async setLogoUrl(
+    id: string,
+    logoUrl: string | null,
+  ): Promise<OrganizationEntity> {
+    const organization = await this.findOne(id);
+    organization.logoUrl = logoUrl;
+    return this.organizationRepository.save(organization);
+  }
 }

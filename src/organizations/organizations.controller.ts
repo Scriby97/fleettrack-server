@@ -7,15 +7,20 @@ import {
   Param,
   Delete,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
   Query,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { OrganizationsService } from './organizations.service';
+import { OrganizationLogoService } from './organization-logo.service';
 import { OrganizationsInvitesService } from './organizations-invites.service';
 import { OrganizationMembersService } from './organization-members.service';
 import { OrganizationSubscriptionsService } from './organization-subscriptions.service';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { CreateSelfServiceOrganizationDto } from './dto/create-self-service-organization.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
+import { UpdateOrganizationProfileDto } from './dto/update-organization-profile.dto';
 import { CreateInviteDto } from './dto/create-invite.dto';
 import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
 import { TransferOwnershipDto } from './dto/transfer-ownership.dto';
@@ -52,6 +57,7 @@ export class OrganizationsController {
     private readonly membersService: OrganizationMembersService,
     private readonly subscriptionsService: OrganizationSubscriptionsService,
     private readonly stripeService: StripeService,
+    private readonly logoService: OrganizationLogoService,
   ) {}
 
   /**
@@ -489,6 +495,66 @@ export class OrganizationsController {
       stripeCustomerId: subscription.stripeCustomerId,
     });
     return { url };
+  }
+
+  // ============================================
+  // Organization Profil - Selfservice durch den Owner (VOR /:id!)
+  // ============================================
+
+  /**
+   * PATCH /organizations/:organizationId/profile
+   * Owner bearbeitet die eigene Organisation (aktuell nur der Name).
+   */
+  @Patch(':organizationId/profile')
+  @UseGuards(OrganizationGuard, OrganizationRolesGuard)
+  @OrganizationRoles(OrganizationRole.OWNER)
+  updateOrganizationProfile(
+    @Param('organizationId') organizationId: string,
+    @Body() dto: UpdateOrganizationProfileDto,
+  ) {
+    return this.organizationsService.updateProfile(organizationId, dto);
+  }
+
+  /**
+   * POST /organizations/:organizationId/logo
+   * Owner setzt/ersetzt das Logo (multipart/form-data, Feld "file").
+   * Der Client verkleinert bereits auf 512x512/WebP; hier nur Absicherung.
+   */
+  @Post(':organizationId/logo')
+  @UseGuards(OrganizationGuard, OrganizationRolesGuard)
+  @OrganizationRoles(OrganizationRole.OWNER)
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: 3 * 1024 * 1024 } }),
+  )
+  async uploadOrganizationLogo(
+    @Param('organizationId') organizationId: string,
+    @UploadedFile()
+    file:
+      | { buffer: Buffer; mimetype: string; size: number; originalname: string }
+      | undefined,
+  ) {
+    if (!file) {
+      throw new AppBadRequestException(
+        ErrorCode.ORG_LOGO_INVALID,
+        'Keine Datei hochgeladen',
+      );
+    }
+    const logoUrl = await this.logoService.uploadLogo(organizationId, file);
+    return this.organizationsService.setLogoUrl(organizationId, logoUrl);
+  }
+
+  /**
+   * DELETE /organizations/:organizationId/logo
+   * Owner entfernt das Logo (Organisation faellt zurueck auf den Initialen-Avatar).
+   */
+  @Delete(':organizationId/logo')
+  @UseGuards(OrganizationGuard, OrganizationRolesGuard)
+  @OrganizationRoles(OrganizationRole.OWNER)
+  async deleteOrganizationLogo(
+    @Param('organizationId') organizationId: string,
+  ) {
+    await this.logoService.deleteLogo(organizationId);
+    return this.organizationsService.setLogoUrl(organizationId, null);
   }
 
   // ============================================

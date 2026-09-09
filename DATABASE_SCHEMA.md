@@ -11,6 +11,7 @@
                          │ subdomain (VARCHAR?)     │
                          │ isActive (BOOLEAN)       │
                          │ contactEmail (VARCHAR?)  │
+                         │ logoUrl (TEXT?)          │
                          │ createdAt (TIMESTAMP)    │
                          │ updatedAt (TIMESTAMP)    │
                          └──────────────────────────┘
@@ -66,6 +67,10 @@
 ### 1. organizations
 - **Primary Key**: `id`
 - **Unique**: `name`, `subdomain`
+- **Spalten**:
+  - `logoUrl`: Optionale öffentliche URL des Firmenlogos (Supabase Storage Bucket
+    `organization-logos`). NULL = kein Logo, das Frontend zeigt dann einen
+    generierten Initialen-Avatar. Siehe Migration `005_organization_logo.sql`.
 - **Beziehungen**: 
   - 1:N zu `organization_members` (User-Membership)
   - 1:N zu `vehicles`

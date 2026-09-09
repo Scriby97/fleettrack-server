@@ -1,6 +1,7 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { OrganizationsService } from './organizations.service';
+import { OrganizationLogoService } from './organization-logo.service';
 import { OrganizationsInvitesService } from './organizations-invites.service';
 import { OrganizationMembersService } from './organization-members.service';
 import { OrganizationSubscriptionsService } from './organization-subscriptions.service';
@@ -37,6 +38,7 @@ import { BillingModule } from '../billing/billing.module';
   controllers: [OrganizationsController, InvitesController],
   providers: [
     OrganizationsService,
+    OrganizationLogoService,
     OrganizationsInvitesService,
     OrganizationMembersService,
     OrganizationSubscriptionsService,

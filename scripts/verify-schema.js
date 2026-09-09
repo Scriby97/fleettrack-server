@@ -37,6 +37,7 @@ const expected = {
       'subdomain',
       'isActive',
       'contactEmail',
+      'logoUrl',
       'createdAt',
       'updatedAt',
     ],

@@ -28,6 +28,11 @@ export class OrganizationEntity {
   @Column({ nullable: true })
   contactEmail?: string;
 
+  // Oeffentliche URL des Logos im Supabase Storage Bucket "organization-logos".
+  // NULL = kein Logo, das Frontend zeigt dann einen Initialen-Avatar.
+  @Column({ type: 'text', nullable: true })
+  logoUrl?: string | null;
+
   @OneToMany(() => OrganizationMemberEntity, (member) => member.organization)
   members!: OrganizationMemberEntity[];
 
