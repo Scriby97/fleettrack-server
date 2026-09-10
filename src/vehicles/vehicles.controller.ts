@@ -147,6 +147,56 @@ export class VehiclesController {
   }
 
   /**
+   * GET /vehicles/:vehicleId/usage-history
+   * Nutzungsverlauf eines Fahrzeugs fuer die Detailansicht (benötigt Auth).
+   * Optional ?startDate=...&endDate=... (ISO-Datetime, nur zusammen) fuer die
+   * Zeitraum-Filterung nach usageDate.
+   * Normale User nur fuer Fahrzeuge ihrer eigenen Organisation(en).
+   */
+  @Get(':vehicleId/usage-history')
+  async getUsageHistory(
+    @Param('vehicleId') vehicleId: string,
+    @CurrentUser() user: AuthUser,
+    @Query('startDate') startDateParam?: string,
+    @Query('endDate') endDateParam?: string,
+  ) {
+    if (user.role !== UserRole.ADMINISTRATOR) {
+      const organizationIds = await this.membersService.getOrganizationIds(
+        user.id,
+      );
+      const vehicle = await this.vehiclesService.findOne(vehicleId);
+      if (!vehicle || !organizationIds.includes(vehicle.organizationId)) {
+        throw new AppForbiddenException(
+          ErrorCode.VEHICLE_NOT_IN_YOUR_ORG,
+          'Fahrzeug gehört nicht zu deiner Organisation',
+        );
+      }
+    }
+
+    if (Boolean(startDateParam) !== Boolean(endDateParam)) {
+      throw new AppBadRequestException(
+        ErrorCode.VALIDATION_BAD_REQUEST_GENERIC,
+        'startDate and endDate must be provided together',
+      );
+    }
+
+    let startDate: Date | undefined;
+    let endDate: Date | undefined;
+    if (startDateParam && endDateParam) {
+      startDate = new Date(startDateParam);
+      endDate = new Date(endDateParam);
+      if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+        throw new AppBadRequestException(
+          ErrorCode.VALIDATION_BAD_REQUEST_GENERIC,
+          'startDate/endDate must be valid dates',
+        );
+      }
+    }
+
+    return this.vehiclesService.usageHistory(vehicleId, startDate, endDate);
+  }
+
+  /**
    * Ermittelt die Organisation, für die ein normaler User Fahrzeuge verwalten darf
    * (Admin oder Owner in genau dieser Organisation). Administratoren dürfen jede
    * Organisation angeben.

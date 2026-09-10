@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { Between, In, Repository } from 'typeorm';
 import { VehicleEntity } from './vehicle.entity';
 import { UsageEntity } from '../usages/usage.entity';
 import { AppNotFoundException, ErrorCode } from '../common/exceptions';
@@ -30,6 +30,25 @@ export interface VehicleStats {
   periodStartHours: number | null;
   periodEndHours: number | null;
   totalFuelLiters: number;
+}
+
+export interface UsageHistoryDay {
+  date: string; // 'YYYY-MM-DD'
+  operatingHours: number;
+  fuelLiters: number;
+  usageCount: number;
+}
+
+export interface UsageHistory {
+  vehicle: VehicleEntity;
+  totals: {
+    operatingHours: number;
+    fuelLiters: number;
+    firstHours: number | null;
+    lastHours: number | null;
+    usageCount: number;
+  };
+  daily: UsageHistoryDay[];
 }
 
 @Injectable()
@@ -191,6 +210,102 @@ export class VehiclesService {
       this.logger.error('Error fetching vehicle stats:', err);
       throw err;
     }
+  }
+
+  /**
+   * Nutzungsverlauf eines einzelnen Fahrzeugs, optional auf einen Zeitraum
+   * (nach usageDate) eingeschraenkt - fuer die Fahrzeug-Detailansicht:
+   * - totals: Betriebsstunden (Summe endOperatingHours - startOperatingHours)
+   *   und getankte Liter im Zeitraum, plus Stand der ersten/letzten Nutzung
+   * - daily: pro Kalendertag mit mindestens einer Nutzung ein Eintrag
+   *   (aufsteigend) fuer das Aktivitaets-Diagramm
+   */
+  async usageHistory(
+    vehicleId: string,
+    startDate?: Date,
+    endDate?: Date,
+  ): Promise<UsageHistory> {
+    const vehicle = await this.repo.findOne({ where: { id: vehicleId } });
+    if (!vehicle) {
+      throw new AppNotFoundException(
+        ErrorCode.VEHICLE_NOT_FOUND,
+        `Vehicle with ID ${vehicleId} not found`,
+        { id: vehicleId },
+      );
+    }
+
+    const qb = this.usageRepo
+      .createQueryBuilder('u')
+      .select("to_char(u.usageDate, 'YYYY-MM-DD')", 'date')
+      .addSelect(
+        'COALESCE(SUM(u.endOperatingHours - u.startOperatingHours), 0)',
+        'operatingHours',
+      )
+      .addSelect('COALESCE(SUM(u.fuelLitersRefilled), 0)', 'fuelLiters')
+      .addSelect('COUNT(*)', 'usageCount')
+      .where('u.vehicleId = :vehicleId', { vehicleId })
+      .groupBy("to_char(u.usageDate, 'YYYY-MM-DD')")
+      .orderBy('date', 'ASC');
+
+    if (startDate && endDate) {
+      qb.andWhere('u.usageDate >= :startDate AND u.usageDate <= :endDate', {
+        startDate,
+        endDate,
+      });
+    }
+
+    const rawDaily = await qb.getRawMany<{
+      date: string;
+      operatingHours: string;
+      fuelLiters: string;
+      usageCount: string;
+    }>();
+
+    const daily: UsageHistoryDay[] = rawDaily.map((r) => ({
+      date: r.date,
+      operatingHours: Number(r.operatingHours) || 0,
+      fuelLiters: Number(r.fuelLiters) || 0,
+      usageCount: Number(r.usageCount) || 0,
+    }));
+
+    const totals = daily.reduce(
+      (acc, d) => {
+        acc.operatingHours += d.operatingHours;
+        acc.fuelLiters += d.fuelLiters;
+        acc.usageCount += d.usageCount;
+        return acc;
+      },
+      { operatingHours: 0, fuelLiters: 0, usageCount: 0 },
+    );
+
+    const dateWhere =
+      startDate && endDate
+        ? { vehicleId, usageDate: Between(startDate, endDate) }
+        : { vehicleId };
+    const [firstUsage, lastUsage] = await Promise.all([
+      this.usageRepo.findOne({
+        where: dateWhere,
+        order: { usageDate: 'ASC' },
+      }),
+      this.usageRepo.findOne({
+        where: dateWhere,
+        order: { usageDate: 'DESC' },
+      }),
+    ]);
+
+    return {
+      vehicle,
+      totals: {
+        operatingHours: Number(totals.operatingHours.toFixed(1)),
+        fuelLiters: totals.fuelLiters,
+        firstHours:
+          firstUsage == null ? null : Number(firstUsage.startOperatingHours),
+        lastHours:
+          lastUsage == null ? null : Number(lastUsage.endOperatingHours),
+        usageCount: totals.usageCount,
+      },
+      daily,
+    };
   }
 
   /**
