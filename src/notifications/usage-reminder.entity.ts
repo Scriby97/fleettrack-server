@@ -14,11 +14,11 @@ export class UsageReminderEntity {
   @Column({ type: 'uuid', unique: true })
   userId: string;
 
-  @Column({ default: false })
+  @Column({ default: true })
   enabled: boolean;
 
   // Format "HH:mm", ausgewertet in der Zeitzone der timezone-Spalte.
-  @Column({ default: '20:00' })
+  @Column({ default: '20:30' })
   reminderTime: string;
 
   @Column({ default: 'Europe/Zurich' })
