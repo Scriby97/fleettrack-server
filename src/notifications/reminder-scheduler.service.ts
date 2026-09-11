@@ -8,10 +8,6 @@ import { NotificationsService } from './notifications.service';
 import { UsageEntity } from '../usages/usage.entity';
 
 const FOUR_HOURS_MS = 4 * 60 * 60 * 1000;
-// Verhindert doppelten Versand innerhalb desselben Tages (z.B. bei einem
-// Server-Neustart genau in derselben Minute) - reminderTime trifft normalerweise
-// nur einmal pro 24h zu, daher reicht ein deutlich kuerzeres Fenster als 24h.
-const DEDUPE_WINDOW_MS = 12 * 60 * 60 * 1000;
 
 @Injectable()
 export class ReminderSchedulerService {
@@ -51,6 +47,9 @@ export class ReminderSchedulerService {
       hour12: false,
     }).format(new Date());
 
+    // findDueReminders liefert alles, dessen reminderTime <= jetzt ist (siehe
+    // dortiger Kommentar) - processReminder unten sorgt dafuer, dass davon
+    // pro Kalendertag trotzdem nur einmal tatsaechlich verschickt wird.
     const dueReminders = await this.notificationsService.findDueReminders(nowHhMm);
 
     for (const reminder of dueReminders) {
@@ -65,12 +64,22 @@ export class ReminderSchedulerService {
     }
   }
 
+  // Kalendertag in Europe/Zurich als "YYYY-MM-DD" - Grundlage fuer "heute
+  // schon verschickt?" statt eines festen Zeitfensters. Ein festes Fenster
+  // (z.B. 12h) waere entweder zu kurz (Doppelversand noch am selben Tag bei
+  // einer fruehen reminderTime) oder zu lang (kein Nachholen nach dem
+  // Aufwachen aus dem Render-Free-Tier-Schlaf) - der Kalendertag ist unabhaengig
+  // davon korrekt, wann genau der Cron-Tick tatsaechlich laeuft.
+  private zurichDateString(date: Date): string {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Zurich' }).format(date);
+  }
+
   private async processReminder(reminder: UsageReminderEntity): Promise<void> {
     const now = Date.now();
 
     if (
       reminder.lastSentAt &&
-      now - new Date(reminder.lastSentAt).getTime() < DEDUPE_WINDOW_MS
+      this.zurichDateString(new Date(reminder.lastSentAt)) === this.zurichDateString(new Date(now))
     ) {
       return;
     }

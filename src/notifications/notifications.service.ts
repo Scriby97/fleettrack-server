@@ -79,11 +79,23 @@ export class NotificationsService {
     await this.subscriptionRepository.delete({ endpoint });
   }
 
+  /**
+   * Faellige Erinnerungen: reminderTime (Format "HH:mm") ist bereits erreicht
+   * oder ueberschritten - bewusst kein exakter Gleichheitsvergleich mehr.
+   * Der EVERY_MINUTE-Cron in ReminderSchedulerService laeuft nur, waehrend
+   * der Prozess wach ist; auf Render Free Tier schlaeft das Backend nach
+   * Inaktivitaet ein, und eine in dieser Zeit verpasste Minute wird nicht
+   * automatisch nachgeholt. Mit "<=" holt der naechste tatsaechlich
+   * laufende Tick eine verpasste Erinnerung nach, statt sie fuer den Tag
+   * ersatzlos ausfallen zu lassen. Der doppelte Versand am selben Tag wird
+   * separat ueber lastSentAt verhindert (siehe
+   * ReminderSchedulerService.processReminder).
+   */
   async findDueReminders(nowHhMm: string): Promise<UsageReminderEntity[]> {
     return this.reminderRepository
       .createQueryBuilder('reminder')
       .where('reminder.enabled = true')
-      .andWhere('reminder."reminderTime" = :nowHhMm', { nowHhMm })
+      .andWhere('reminder."reminderTime" <= :nowHhMm', { nowHhMm })
       .getMany();
   }
 
