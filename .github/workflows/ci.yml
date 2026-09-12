@@ -18,6 +18,11 @@ jobs:
 
       - run: npm ci
 
+      - name: Lint
+        # Ohne --fix (anders als der lokale "lint"-Skript-Alias): eine CI-
+        # Prüfung soll fehlschlagen, nicht still Dateien verändern.
+        run: npx eslint "{src,apps,libs,test}/**/*.ts"
+
       - name: Unit tests
         run: npm test
 

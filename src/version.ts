@@ -17,7 +17,7 @@ export function getVersionInfo(): VersionInfo {
   try {
     const pkg = JSON.parse(
       readFileSync(join(process.cwd(), 'package.json'), 'utf8'),
-    );
+    ) as { version?: string };
     version = pkg.version || version;
   } catch {
     // package.json nicht lesbar - Fallback-Version verwenden

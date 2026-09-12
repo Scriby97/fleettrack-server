@@ -8,7 +8,10 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { OrganizationEntity } from './organization.entity';
-import { SubscriptionTier, SubscriptionStatus } from './enums/subscription-tier.enum';
+import {
+  SubscriptionTier,
+  SubscriptionStatus,
+} from './enums/subscription-tier.enum';
 
 @Entity('organization_subscriptions')
 export class OrganizationSubscriptionEntity {

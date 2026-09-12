@@ -1,5 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js';
+
+// createClient()'s own default generic parameters don't line up 1:1 with the
+// bare `SupabaseClient` type's defaults (a known supabase-js quirk) - using
+// its actual return type instead avoids a spurious "unsafe assignment"
+// between two structurally-identical-but-nominally-different instantiations.
+type SupabaseClient = ReturnType<typeof createClient>;
 
 @Injectable()
 export class SupabaseService {
@@ -15,7 +21,10 @@ export class SupabaseService {
 
     try {
       const payload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-      const padded = payload.padEnd(payload.length + (4 - (payload.length % 4)) % 4, '=');
+      const padded = payload.padEnd(
+        payload.length + ((4 - (payload.length % 4)) % 4),
+        '=',
+      );
       const decoded = Buffer.from(padded, 'base64').toString('utf8');
       return JSON.parse(decoded) as Record<string, unknown>;
     } catch {
@@ -59,8 +68,8 @@ export class SupabaseService {
 
     const payload = this.parseJwtPayload(serviceRoleKey);
     if (payload) {
-      const role = String(payload.role || 'unknown');
-      const issuer = String(payload.iss || 'unknown');
+      const role = typeof payload.role === 'string' ? payload.role : 'unknown';
+      const issuer = typeof payload.iss === 'string' ? payload.iss : 'unknown';
       this.logger.debug(`Service role key payload role: ${role}`);
       this.logger.debug(`Service role key issuer: ${issuer}`);
     } else {

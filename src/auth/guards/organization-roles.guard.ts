@@ -2,6 +2,7 @@ import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { OrganizationRole } from '../enums/user-role.enum';
 import { AppForbiddenException, ErrorCode } from '../../common/exceptions';
+import type { AuthenticatedRequest } from '../decorators/current-user.decorator';
 
 /**
  * Guard to check if user has required role within an organization
@@ -21,7 +22,7 @@ export class OrganizationRolesGuard implements CanActivate {
       return true;
     }
 
-    const request = context.switchToHttp().getRequest();
+    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
     const membership = request.organizationMembership;
 
     if (!membership) {
@@ -38,7 +39,7 @@ export class OrganizationRolesGuard implements CanActivate {
       [OrganizationRole.EMPLOYEE]: 1,
     };
 
-    const userRoleLevel = roleHierarchy[membership.role as OrganizationRole];
+    const userRoleLevel = roleHierarchy[membership.role];
     const minRequiredLevel = Math.min(
       ...requiredRoles.map((role) => roleHierarchy[role]),
     );

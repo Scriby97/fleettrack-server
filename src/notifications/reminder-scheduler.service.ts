@@ -50,7 +50,8 @@ export class ReminderSchedulerService {
     // findDueReminders liefert alles, dessen reminderTime <= jetzt ist (siehe
     // dortiger Kommentar) - processReminder unten sorgt dafuer, dass davon
     // pro Kalendertag trotzdem nur einmal tatsaechlich verschickt wird.
-    const dueReminders = await this.notificationsService.findDueReminders(nowHhMm);
+    const dueReminders =
+      await this.notificationsService.findDueReminders(nowHhMm);
 
     for (const reminder of dueReminders) {
       try {
@@ -71,7 +72,9 @@ export class ReminderSchedulerService {
   // Aufwachen aus dem Render-Free-Tier-Schlaf) - der Kalendertag ist unabhaengig
   // davon korrekt, wann genau der Cron-Tick tatsaechlich laeuft.
   private zurichDateString(date: Date): string {
-    return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Zurich' }).format(date);
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Europe/Zurich',
+    }).format(date);
   }
 
   private async processReminder(reminder: UsageReminderEntity): Promise<void> {
@@ -79,7 +82,8 @@ export class ReminderSchedulerService {
 
     if (
       reminder.lastSentAt &&
-      this.zurichDateString(new Date(reminder.lastSentAt)) === this.zurichDateString(new Date(now))
+      this.zurichDateString(new Date(reminder.lastSentAt)) ===
+        this.zurichDateString(new Date(now))
     ) {
       return;
     }
@@ -98,9 +102,8 @@ export class ReminderSchedulerService {
       return;
     }
 
-    const subscriptions = await this.notificationsService.getSubscriptionsForUser(
-      reminder.userId,
-    );
+    const subscriptions =
+      await this.notificationsService.getSubscriptionsForUser(reminder.userId);
 
     const payload = JSON.stringify({
       title: 'Nutzung erfassen',

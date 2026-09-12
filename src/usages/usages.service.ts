@@ -119,7 +119,7 @@ export class UsagesService {
       ...data,
       startOperatingHours: data.startOperatingHours ?? 0,
       endOperatingHours: data.endOperatingHours,
-      fuelLitersRefilled: (data.fuelLitersRefilled ?? 0) as any,
+      fuelLitersRefilled: data.fuelLitersRefilled ?? 0,
     };
     const saved = await this.repo.save(this.repo.create(toSave));
     return saved;

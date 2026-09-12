@@ -10,6 +10,7 @@ import {
 } from 'typeorm';
 import { UserProfileEntity } from '../auth/entities/user-profile.entity';
 import { OrganizationEntity } from './organization.entity';
+import { OrganizationRole } from '../auth/enums/user-role.enum';
 
 /**
  * Junction table for user-organization memberships
@@ -27,31 +28,26 @@ export class OrganizationMemberEntity {
   @Column('uuid')
   userId: string;
 
-  @ManyToOne(
-    () => UserProfileEntity,
-    (user) => user.organizationMemberships,
-    {
-      onDelete: 'CASCADE',
-    },
-  )
+  @ManyToOne(() => UserProfileEntity, (user) => user.organizationMemberships, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'userId' })
   user: UserProfileEntity;
 
   @Column('uuid')
   organizationId: string;
 
-  @ManyToOne(
-    () => OrganizationEntity,
-    (org) => org.members,
-    {
-      onDelete: 'CASCADE',
-    },
-  )
+  @ManyToOne(() => OrganizationEntity, (org) => org.members, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'organizationId' })
   organization: OrganizationEntity;
 
-  @Column({ default: 'employee' })
-  role: string; // 'employee', 'admin', 'owner'
+  // type: 'varchar' explizit, damit sich am SQL-Spaltentyp nichts ändert -
+  // nur der TS-Typ wird auf OrganizationRole verschärft (statt string), damit
+  // Vergleiche wie `member.role === OrganizationRole.OWNER` typsicher sind.
+  @Column({ type: 'varchar', default: 'employee' })
+  role: OrganizationRole;
 
   @CreateDateColumn()
   joinedAt: Date;

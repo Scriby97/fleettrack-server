@@ -1,4 +1,12 @@
-import { Controller, Post, Body, Get, Headers, Param, Patch } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  Get,
+  Headers,
+  Param,
+  Patch,
+} from '@nestjs/common';
 import { AuthService } from './auth.service';
 import {
   SignInDto,
@@ -10,7 +18,6 @@ import {
 import { Public } from './decorators/public.decorator';
 import { CurrentUser } from './decorators/current-user.decorator';
 import type { AuthUser } from './decorators/current-user.decorator';
-import { CurrentOrganization } from './decorators/current-organization.decorator';
 import { Roles } from './decorators/roles.decorator';
 import { UserRole } from './enums/user-role.enum';
 
@@ -119,9 +126,6 @@ export class AuthController {
     @Param('userId') userId: string,
     @CurrentUser() user: AuthUser,
   ) {
-    return this.authService.adminResetPasswordByUserId(
-      userId,
-      user.role,
-    );
+    return this.authService.adminResetPasswordByUserId(userId, user.role);
   }
 }

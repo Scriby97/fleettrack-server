@@ -2,6 +2,7 @@ import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { UserRole } from '../enums/user-role.enum';
 import { ROLES_KEY } from '../decorators/roles.decorator';
+import type { AuthenticatedRequest } from '../decorators/current-user.decorator';
 
 @Injectable()
 export class RolesGuard implements CanActivate {
@@ -17,8 +18,8 @@ export class RolesGuard implements CanActivate {
       return true; // Keine Rollen erforderlich
     }
 
-    const { user } = context.switchToHttp().getRequest();
-    
+    const { user } = context.switchToHttp().getRequest<AuthenticatedRequest>();
+
     if (!user) {
       return false; // Kein User = kein Zugriff
     }

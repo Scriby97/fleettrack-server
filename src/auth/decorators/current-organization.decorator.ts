@@ -1,5 +1,6 @@
 import { createParamDecorator, ExecutionContext } from '@nestjs/common';
 import { OrganizationMemberEntity } from '../../organizations/organization-member.entity';
+import type { AuthenticatedRequest } from './current-user.decorator';
 
 /**
  * Decorator to get current organization info
@@ -7,8 +8,8 @@ import { OrganizationMemberEntity } from '../../organizations/organization-membe
  */
 export const CurrentOrganization = createParamDecorator(
   (data: unknown, ctx: ExecutionContext): string | undefined => {
-    const request = ctx.switchToHttp().getRequest();
-    
+    const request = ctx.switchToHttp().getRequest<AuthenticatedRequest>();
+
     // If membership was set by OrganizationGuard, return organization ID from it
     if (request.organizationMembership) {
       return request.organizationMembership.organizationId;
@@ -24,8 +25,11 @@ export const CurrentOrganization = createParamDecorator(
  * Returns the full membership object with role
  */
 export const CurrentOrganizationMembership = createParamDecorator(
-  (data: unknown, ctx: ExecutionContext): OrganizationMemberEntity | undefined => {
-    const request = ctx.switchToHttp().getRequest();
+  (
+    data: unknown,
+    ctx: ExecutionContext,
+  ): OrganizationMemberEntity | undefined => {
+    const request = ctx.switchToHttp().getRequest<AuthenticatedRequest>();
     return request.organizationMembership;
   },
 );

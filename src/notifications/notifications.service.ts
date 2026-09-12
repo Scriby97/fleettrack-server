@@ -105,10 +105,14 @@ export class NotificationsService {
   }
 
   async markSent(reminderId: string): Promise<void> {
-    await this.reminderRepository.update(reminderId, { lastSentAt: new Date() });
+    await this.reminderRepository.update(reminderId, {
+      lastSentAt: new Date(),
+    });
   }
 
-  async getSubscriptionsForUser(userId: string): Promise<PushSubscriptionEntity[]> {
+  async getSubscriptionsForUser(
+    userId: string,
+  ): Promise<PushSubscriptionEntity[]> {
     return this.subscriptionRepository.find({ where: { userId } });
   }
 }

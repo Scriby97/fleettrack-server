@@ -107,7 +107,10 @@ export class VehiclesController {
     if (startDateParam && endDateParam) {
       startDate = new Date(startDateParam);
       endDate = new Date(endDateParam);
-      if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+      if (
+        Number.isNaN(startDate.getTime()) ||
+        Number.isNaN(endDate.getTime())
+      ) {
         throw new AppBadRequestException(
           ErrorCode.VALIDATION_BAD_REQUEST_GENERIC,
           'startDate/endDate must be valid dates',
@@ -185,7 +188,10 @@ export class VehiclesController {
     if (startDateParam && endDateParam) {
       startDate = new Date(startDateParam);
       endDate = new Date(endDateParam);
-      if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+      if (
+        Number.isNaN(startDate.getTime()) ||
+        Number.isNaN(endDate.getTime())
+      ) {
         throw new AppBadRequestException(
           ErrorCode.VALIDATION_BAD_REQUEST_GENERIC,
           'startDate/endDate must be valid dates',
@@ -285,8 +291,7 @@ export class VehiclesController {
       return;
     }
 
-    const currentCount =
-      await this.vehiclesService.countActive(organizationId);
+    const currentCount = await this.vehiclesService.countActive(organizationId);
     if (currentCount >= limits.maxVehicles) {
       throw new AppForbiddenException(
         ErrorCode.VEHICLE_LIMIT_REACHED,

@@ -28,8 +28,15 @@ export class NotificationsController {
   }
 
   @Put('reminder')
-  updateReminder(@CurrentUser() user: AuthUser, @Body() dto: UpdateReminderDto) {
-    return this.notificationsService.updateReminder(user.id, dto.enabled, dto.time);
+  updateReminder(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: UpdateReminderDto,
+  ) {
+    return this.notificationsService.updateReminder(
+      user.id,
+      dto.enabled,
+      dto.time,
+    );
   }
 
   @Get('vapid-public-key')

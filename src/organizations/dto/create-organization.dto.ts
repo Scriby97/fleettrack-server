@@ -1,4 +1,10 @@
-import { IsString, IsEmail, IsOptional, MinLength, IsEnum } from 'class-validator';
+import {
+  IsString,
+  IsEmail,
+  IsOptional,
+  MinLength,
+  IsEnum,
+} from 'class-validator';
 import { OrganizationRole } from '../../auth/enums/user-role.enum';
 
 export class CreateOrganizationDto {

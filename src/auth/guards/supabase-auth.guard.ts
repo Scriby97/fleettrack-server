@@ -1,4 +1,9 @@
-import { Injectable, CanActivate, ExecutionContext, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  Logger,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -7,6 +12,7 @@ import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 import { UserProfileEntity } from '../entities/user-profile.entity';
 import { UserRole } from '../enums/user-role.enum';
 import { AppUnauthorizedException, ErrorCode } from '../../common/exceptions';
+import type { AuthenticatedRequest } from '../decorators/current-user.decorator';
 
 @Injectable()
 export class SupabaseAuthGuard implements CanActivate {
@@ -42,7 +48,7 @@ export class SupabaseAuthGuard implements CanActivate {
       return true;
     }
 
-    const request = context.switchToHttp().getRequest();
+    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
     const authHeader = request.headers.authorization;
 
     this.logger.debug(`Auth Header: ${authHeader ? 'vorhanden' : 'fehlt'}`);

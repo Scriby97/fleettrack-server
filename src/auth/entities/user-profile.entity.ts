@@ -7,6 +7,7 @@ import {
   OneToMany,
 } from 'typeorm';
 import { OrganizationMemberEntity } from '../../organizations/organization-member.entity';
+import { UserRole } from '../enums/user-role.enum';
 
 @Entity('user_profiles')
 export class UserProfileEntity {
@@ -16,13 +17,12 @@ export class UserProfileEntity {
   @Column({ unique: true })
   email!: string;
 
-  @Column({ default: 'user' })
-  role!: string; // 'user' oder 'administrator'
+  // type: 'varchar' explizit, damit sich am SQL-Spaltentyp nichts ändert -
+  // nur der TS-Typ wird auf UserRole verschärft (statt string).
+  @Column({ type: 'varchar', default: 'user' })
+  role!: UserRole;
 
-  @OneToMany(
-    () => OrganizationMemberEntity,
-    (membership) => membership.user,
-  )
+  @OneToMany(() => OrganizationMemberEntity, (membership) => membership.user)
   organizationMemberships!: OrganizationMemberEntity[];
 
   @Column({ nullable: true })

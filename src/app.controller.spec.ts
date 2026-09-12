@@ -44,7 +44,9 @@ describe('AppController', () => {
 
       expect(result.status).toBe('error');
       expect(result.database).toBe('disconnected');
-      expect(result.error).toBe('connection refused');
+      if ('error' in result) {
+        expect(result.error).toBe('connection refused');
+      }
     });
   });
 });

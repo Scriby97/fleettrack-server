@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { UserRole } from '../enums/user-role.enum';
 import { OrganizationMemberEntity } from '../../organizations/organization-member.entity';
 import { AppForbiddenException, ErrorCode } from '../../common/exceptions';
+import type { AuthenticatedRequest } from '../decorators/current-user.decorator';
 
 /**
  * Guard to ensure users only access organizations they belong to
@@ -17,9 +18,14 @@ export class OrganizationGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context.switchToHttp().getRequest();
+    const request = context.switchToHttp().getRequest<
+      Omit<AuthenticatedRequest, 'body'> & {
+        body?: { organizationId?: string };
+      }
+    >();
     const user = request.user;
-    const organizationId = request.params.organizationId || request.body?.organizationId;
+    const organizationId =
+      request.params.organizationId || request.body?.organizationId;
 
     if (!user) {
       throw new AppForbiddenException(

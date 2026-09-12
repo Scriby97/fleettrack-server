@@ -39,7 +39,10 @@ export class OrganizationEntity {
   @OneToMany(() => VehicleEntity, (vehicle) => vehicle.organization)
   vehicles!: VehicleEntity[];
 
-  @OneToOne(() => OrganizationSubscriptionEntity, (subscription) => subscription.organization)
+  @OneToOne(
+    () => OrganizationSubscriptionEntity,
+    (subscription) => subscription.organization,
+  )
   subscription?: OrganizationSubscriptionEntity;
 
   @CreateDateColumn()

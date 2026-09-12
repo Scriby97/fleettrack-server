@@ -30,14 +30,18 @@ export class AuthService {
     code: ErrorCode;
     message: string;
   } {
-    const errorTranslations: { [key: string]: { code: ErrorCode; message: string } } = {
+    const errorTranslations: {
+      [key: string]: { code: ErrorCode; message: string };
+    } = {
       'Email not confirmed': {
         code: ErrorCode.AUTH_EMAIL_NOT_CONFIRMED,
-        message: 'E-Mail-Adresse wurde noch nicht bestätigt. Bitte überprüfen Sie Ihr Postfach.',
+        message:
+          'E-Mail-Adresse wurde noch nicht bestätigt. Bitte überprüfen Sie Ihr Postfach.',
       },
       'Invalid login credentials': {
         code: ErrorCode.AUTH_INVALID_CREDENTIALS,
-        message: 'Ungültige Anmeldedaten. Bitte überprüfen Sie E-Mail und Passwort.',
+        message:
+          'Ungültige Anmeldedaten. Bitte überprüfen Sie E-Mail und Passwort.',
       },
       'User already registered': {
         code: ErrorCode.AUTH_USER_ALREADY_REGISTERED,
@@ -69,7 +73,8 @@ export class AuthService {
       },
       'Email rate limit exceeded': {
         code: ErrorCode.AUTH_EMAIL_RATE_LIMIT,
-        message: 'Zu viele E-Mail-Anfragen. Bitte versuchen Sie es später erneut.',
+        message:
+          'Zu viele E-Mail-Anfragen. Bitte versuchen Sie es später erneut.',
       },
       'Invalid token': {
         code: ErrorCode.AUTH_TOKEN_INVALID,
@@ -82,7 +87,9 @@ export class AuthService {
     };
 
     // Suche nach passendem Code (Supabase-Message enthält den Schlüssel als Substring)
-    for (const [englishError, translation] of Object.entries(errorTranslations)) {
+    for (const [englishError, translation] of Object.entries(
+      errorTranslations,
+    )) {
       if (errorMessage.includes(englishError)) {
         return translation;
       }
@@ -104,7 +111,9 @@ export class AuthService {
       return undefined;
     }
 
-    return base.endsWith('/') ? `${base}reset-password` : `${base}/reset-password`;
+    return base.endsWith('/')
+      ? `${base}reset-password`
+      : `${base}/reset-password`;
   }
 
   /**
@@ -145,14 +154,14 @@ export class AuthService {
   async signUp(
     email: string,
     password: string,
-    metadata?: any,
+    metadata?: { firstName?: string; lastName?: string },
     role: UserRole = UserRole.USER,
   ) {
     // Prüfe ob User bereits existiert
-    const existingProfile = await this.profileRepo.findOne({ 
-      where: { email: email.toLowerCase() } 
+    const existingProfile = await this.profileRepo.findOne({
+      where: { email: email.toLowerCase() },
     });
-    
+
     if (existingProfile) {
       throw new AppUnauthorizedException(
         ErrorCode.AUTH_USER_ALREADY_REGISTERED,
@@ -255,11 +264,10 @@ export class AuthService {
    * Admin: Passwort-Reset Email an einen User senden
    * Nur Administratoren dürfen alle User, normale User dürfen keine Passwort-Resets machen
    */
-  async adminResetPasswordByUserId(
-    userId: string,
-    requesterRole: UserRole,
-  ) {
-    const targetProfile = await this.profileRepo.findOne({ where: { id: userId } });
+  async adminResetPasswordByUserId(userId: string, requesterRole: UserRole) {
+    const targetProfile = await this.profileRepo.findOne({
+      where: { id: userId },
+    });
 
     if (!targetProfile) {
       throw new AppUnauthorizedException(

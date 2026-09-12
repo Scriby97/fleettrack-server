@@ -166,7 +166,9 @@ export class OrganizationMembersService {
       const repo = manager.getRepository(OrganizationMemberEntity);
 
       const [currentOwner, newOwner] = await Promise.all([
-        repo.findOne({ where: { id: currentOwnerMembershipId, organizationId } }),
+        repo.findOne({
+          where: { id: currentOwnerMembershipId, organizationId },
+        }),
         repo.findOne({ where: { id: newOwnerMemberId, organizationId } }),
       ]);
 

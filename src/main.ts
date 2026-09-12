@@ -16,7 +16,9 @@ async function bootstrap() {
   const logger = new Logger('Bootstrap');
 
   const { version, gitCommit, gitBranch } = getVersionInfo();
-  logger.log(`Version: ${version} | Commit: ${gitCommit} | Branch: ${gitBranch}`);
+  logger.log(
+    `Version: ${version} | Commit: ${gitCommit} | Branch: ${gitBranch}`,
+  );
 
   app.setGlobalPrefix('api', {
     exclude: [{ path: '', method: RequestMethod.GET }],
@@ -37,4 +39,4 @@ async function bootstrap() {
   await app.listen(port);
   logger.log(`Application is running on: ${await app.getUrl()}`);
 }
-bootstrap();
+void bootstrap();

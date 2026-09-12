@@ -7,6 +7,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { OrganizationEntity } from '../organization.entity';
+import { OrganizationRole } from '../../auth/enums/user-role.enum';
 
 @Entity('organization_invites')
 export class OrganizationInviteEntity {
@@ -26,8 +27,8 @@ export class OrganizationInviteEntity {
   @Column()
   email: string; // Email des eingeladenen Users
 
-  @Column({ default: 'user' })
-  role: string; // Rolle die der User bekommen soll
+  @Column({ type: 'varchar', default: 'user' })
+  role: OrganizationRole; // Rolle die der User bekommen soll
 
   @Column({ type: 'uuid', nullable: true })
   invitedBy?: string; // User ID der den Invite erstellt hat

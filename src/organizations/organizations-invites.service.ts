@@ -65,7 +65,7 @@ export class OrganizationsInvitesService {
       where: {
         organizationId,
         email: createInviteDto.email,
-        usedAt: null as any,
+        usedAt: IsNull(),
       },
     });
 
@@ -165,7 +165,7 @@ export class OrganizationsInvitesService {
   async createMembership(
     userId: string,
     organizationId: string,
-    role: string = OrganizationRole.EMPLOYEE,
+    role: OrganizationRole = OrganizationRole.EMPLOYEE,
   ): Promise<OrganizationMemberEntity> {
     this.logger.log(
       `createMembership userId=${userId} organizationId=${organizationId} role=${role}`,

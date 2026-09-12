@@ -336,7 +336,7 @@ export class OrganizationsController {
       organizationId,
       memberId,
       dto.role,
-      membership.role as OrganizationRole,
+      membership.role,
     );
   }
 

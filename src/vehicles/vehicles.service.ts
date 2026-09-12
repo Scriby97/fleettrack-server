@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, In, Repository } from 'typeorm';
+import { Between, FindOptionsWhere, In, Repository } from 'typeorm';
 import { VehicleEntity } from './vehicle.entity';
 import { UsageEntity } from '../usages/usage.entity';
 import { AppNotFoundException, ErrorCode } from '../common/exceptions';
@@ -19,10 +19,10 @@ export interface VehicleStats {
   plate: string;
   snowsatNumber: string;
   isRetired: boolean;
-  location?: string;
-  vehicleType?: string;
-  fuelType?: string;
-  notes?: string;
+  location: string | null;
+  vehicleType: string | null;
+  fuelType: string | null;
+  notes: string | null;
   organizationId: string;
   // Betriebsstunden der chronologisch ersten/letzten Nutzung im
   // angefragten Zeitraum (nach usageDate, nicht creationDate) - null,
@@ -30,6 +30,23 @@ export interface VehicleStats {
   periodStartHours: number | null;
   periodEndHours: number | null;
   totalFuelLiters: number;
+}
+
+/** Shape of each raw row returned by the stats() query below (getRawMany). */
+interface StatsRawRow {
+  id: string;
+  name: string;
+  plate: string;
+  snowsatNumber: string;
+  isRetired: boolean;
+  location: string | null;
+  vehicleType: string | null;
+  fuelType: string | null;
+  notes: string | null;
+  organizationId: string;
+  periodStartHours: string | null;
+  periodEndHours: string | null;
+  totalFuelLiters: string | null;
 }
 
 export interface UsageHistoryDay {
@@ -74,7 +91,7 @@ export class VehiclesService {
       return [];
     }
 
-    const where: any = {};
+    const where: FindOptionsWhere<VehicleEntity> = {};
 
     if (organizationIds) {
       where.organizationId = In(organizationIds);
@@ -177,11 +194,11 @@ export class VehiclesService {
         const [query, params] = qb.getQueryAndParameters();
         this.logger.debug(`Vehicle stats SQL: ${query}`);
         this.logger.debug(`Vehicle stats params: ${JSON.stringify(params)}`);
-      } catch (e) {
+      } catch {
         // ignore if query introspection isn't available
       }
 
-      const raw = await qb.getRawMany();
+      const raw = await qb.getRawMany<StatsRawRow>();
 
       // convert string numbers to real numbers
       return raw.map((r) => ({

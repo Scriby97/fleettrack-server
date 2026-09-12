@@ -1,4 +1,10 @@
-import { IsEmail, IsString, MinLength, IsOptional, IsEnum, IsUUID } from 'class-validator';
+import {
+  IsEmail,
+  IsString,
+  MinLength,
+  IsOptional,
+  IsEnum,
+} from 'class-validator';
 import { UserRole } from '../enums/user-role.enum';
 
 export class SignInDto {
@@ -27,7 +33,7 @@ export class SignUpDto {
   lastName?: string;
 
   @IsOptional()
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 export class RefreshTokenDto {
