@@ -16,6 +16,7 @@
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
     "db:schema:verify": "node scripts/verify-schema.js --strict",
+    "backup": "node scripts/backup-db.js",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest",
     "test:watch": "jest --watch",
