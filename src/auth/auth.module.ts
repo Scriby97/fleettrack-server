@@ -6,9 +6,12 @@ import { RolesGuard } from './guards/roles.guard';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { UserProfileEntity } from './entities/user-profile.entity';
+import { OrganizationMemberEntity } from '../organizations/organization-member.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([UserProfileEntity])],
+  imports: [
+    TypeOrmModule.forFeature([UserProfileEntity, OrganizationMemberEntity]),
+  ],
   controllers: [AuthController],
   providers: [
     AuthService,

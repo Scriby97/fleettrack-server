@@ -591,4 +591,29 @@ export class OrganizationsController {
   remove(@Param('id') id: string) {
     return this.organizationsService.remove(id);
   }
+
+  /**
+   * DELETE /organizations/:organizationId/self-delete
+   * Der Owner löscht seine eigene Organisation (Soft-Delete, siehe
+   * OrganizationsService.deleteByOwner). Nur der aktuelle Owner darf das
+   * auslösen.
+   */
+  @Delete(':organizationId/self-delete')
+  @UseGuards(OrganizationGuard, OrganizationRolesGuard)
+  @OrganizationRoles(OrganizationRole.OWNER)
+  selfDeleteOrganization(@Param('organizationId') organizationId: string) {
+    return this.organizationsService.deleteByOwner(organizationId);
+  }
+
+  /**
+   * DELETE /organizations/:id/hard
+   * Löscht eine Organisation endgültig (nur globale Administratoren, nur
+   * nachdem der Owner sie selbst zur Löschung freigegeben hat - siehe
+   * OrganizationsService.hardDelete).
+   */
+  @Delete(':id/hard')
+  @Roles(UserRole.ADMINISTRATOR)
+  hardDelete(@Param('id') id: string) {
+    return this.organizationsService.hardDelete(id);
+  }
 }

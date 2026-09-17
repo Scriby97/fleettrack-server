@@ -159,6 +159,18 @@ export class OrganizationsInvitesService {
   }
 
   /**
+   * Loescht alle Einladungen einer Organisation. Noetig vor einem echten
+   * Loeschen der Organisation selbst (siehe OrganizationsService.hardDelete) -
+   * organization_invites.organizationId hat kein ON DELETE CASCADE, ein
+   * Loeschen der Organisation wuerde sonst an dieser Fremdschluessel-
+   * Beziehung scheitern, falls noch (offene oder abgelaufene) Einladungen
+   * existieren.
+   */
+  async deleteAllForOrganization(organizationId: string): Promise<void> {
+    await this.inviteRepository.delete({ organizationId });
+  }
+
+  /**
    * Erstellt eine Organization-Membership für einen User
    * Wird nach erfolgreichem Accept eines Invites aufgerufen
    */

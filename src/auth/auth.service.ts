@@ -1,8 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import { SupabaseService } from '../supabase/supabase.service';
 import { UserProfileEntity } from './entities/user-profile.entity';
+import { OrganizationMemberEntity } from '../organizations/organization-member.entity';
 import { UserRole } from './enums/user-role.enum';
 import {
   AppForbiddenException,
@@ -17,6 +18,11 @@ export class AuthService {
     private supabaseService: SupabaseService,
     @InjectRepository(UserProfileEntity)
     private profileRepo: Repository<UserProfileEntity>,
+    // Direkte Repository-Injektion (statt OrganizationMembersService) - das
+    // OrganizationsModule importiert bereits AuthModule, ein Import in
+    // Gegenrichtung waere zirkulaer. Gleiches Muster wie OrganizationGuard.
+    @InjectRepository(OrganizationMemberEntity)
+    private memberRepo: Repository<OrganizationMemberEntity>,
   ) {}
 
   /**
@@ -331,12 +337,23 @@ export class AuthService {
   }
 
   /**
-   * User-Profile abrufen
+   * User-Profile abrufen. Die Mitgliedschaften werden bewusst gefiltert
+   * geladen (archivedAt IS NULL, gleiches Muster wie
+   * OrganizationMembersService.findByUser) statt per einfacher
+   * TypeORM-Relation - sonst wuerde ein User weiterhin eine Organisation
+   * sehen, deren Mitgliedschaft archiviert wurde (z.B. nach einem
+   * Owner-Self-Delete, siehe OrganizationsService.deleteByOwner).
    */
   async getUserProfile(userId: string) {
-    return this.profileRepo.findOne({
-      where: { id: userId },
-      relations: ['organizationMemberships'],
+    const profile = await this.profileRepo.findOne({ where: { id: userId } });
+    if (!profile) return null;
+
+    profile.organizationMemberships = await this.memberRepo.find({
+      where: { userId, archivedAt: IsNull() },
+      relations: ['organization'],
+      order: { joinedAt: 'ASC' },
     });
+
+    return profile;
   }
 }

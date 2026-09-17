@@ -33,6 +33,13 @@ export class OrganizationEntity {
   @Column({ type: 'text', nullable: true })
   logoUrl?: string | null;
 
+  // Gesetzt, wenn der Owner die Organisation selbst zur Loeschung freigegeben
+  // hat (Soft-Delete, NULL = aktiv) - siehe OrganizationsService.deleteByOwner.
+  // isActive bleibt dabei bewusst true, damit die Organisation fuer globale
+  // Administratoren weiterhin sichtbar bleibt (siehe OrganizationsService.hardDelete).
+  @Column({ type: 'timestamp', nullable: true })
+  deletionRequestedAt?: Date | null;
+
   @OneToMany(() => OrganizationMemberEntity, (member) => member.organization)
   members!: OrganizationMemberEntity[];
 

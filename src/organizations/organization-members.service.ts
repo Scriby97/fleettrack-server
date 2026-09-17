@@ -264,6 +264,22 @@ export class OrganizationMembersService {
   }
 
   /**
+   * Archiviert ALLE Mitgliedschaften einer Organisation, inklusive Owner -
+   * für den Fall, dass der Owner seine Organisation selbst löscht (siehe
+   * OrganizationsService.deleteByOwner). Im Unterschied zu
+   * archiveMembersExceptOwner bleibt hier niemand ausgenommen: der Owner
+   * verliert dadurch (über den OrganizationGuard, der archivierte
+   * Mitgliedschaften ausschliesst) ebenfalls sofort den Zugriff. Setzt nur
+   * "archivedAt", löscht nichts - siehe archiveMembersExceptOwner.
+   */
+  async archiveAllMembers(organizationId: string): Promise<void> {
+    await this.memberRepository.update(
+      { organizationId, archivedAt: IsNull() },
+      { archivedAt: new Date() },
+    );
+  }
+
+  /**
    * Holt alle wegen Nichtzahlung archivierten Mitgliedschaften einer
    * Organisation zurück - aufgerufen, sobald dieselbe Organisation wieder ein
    * bezahltes Abo aktiviert (siehe

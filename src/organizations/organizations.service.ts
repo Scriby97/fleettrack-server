@@ -1,8 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import { OrganizationEntity } from './organization.entity';
 import { OrganizationSubscriptionEntity } from './organization-subscription.entity';
+import { VehicleEntity } from '../vehicles/vehicle.entity';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { CreateSelfServiceOrganizationDto } from './dto/create-self-service-organization.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
@@ -12,6 +13,7 @@ import { OrganizationMembersService } from './organization-members.service';
 import { OrganizationRole } from '../auth/enums/user-role.enum';
 import { SubscriptionTier } from './enums/subscription-tier.enum';
 import {
+  AppBadRequestException,
   AppConflictException,
   AppNotFoundException,
   ErrorCode,
@@ -22,6 +24,11 @@ export class OrganizationsService {
   constructor(
     @InjectRepository(OrganizationEntity)
     private readonly organizationRepository: Repository<OrganizationEntity>,
+    // Nur fuer die Fahrzeug-Archivierung in deleteByOwner - gleiches Inline-
+    // Muster wie OrganizationSubscriptionsService.downgradeToFree, kein
+    // voller VehiclesService-Import noetig.
+    @InjectRepository(VehicleEntity)
+    private readonly vehicleRepository: Repository<VehicleEntity>,
     private readonly invitesService: OrganizationsInvitesService,
     private readonly subscriptionsService: OrganizationSubscriptionsService,
     private readonly membersService: OrganizationMembersService,
@@ -233,6 +240,55 @@ export class OrganizationsService {
     const organization = await this.findOne(id);
     organization.isActive = false;
     await this.organizationRepository.save(organization);
+  }
+
+  /**
+   * Der Owner löscht seine eigene Organisation (Soft-Delete). Archiviert alle
+   * Mitgliedschaften (inklusive Owner - dadurch verliert er über den
+   * OrganizationGuard sofort selbst den Zugriff, siehe
+   * OrganizationMembersService.archiveAllMembers) sowie alle Fahrzeuge. Die
+   * Organisation selbst bleibt bestehen (isActive bleibt true) und ist damit
+   * für globale Administratoren weiterhin sichtbar (siehe findAll) - sie
+   * sehen an "deletionRequestedAt", dass der Owner die Organisation zur
+   * Löschung freigegeben hat, und können sie über hardDelete endgültig
+   * entfernen.
+   */
+  async deleteByOwner(organizationId: string): Promise<void> {
+    const organization = await this.findOne(organizationId);
+
+    await Promise.all([
+      this.membersService.archiveAllMembers(organizationId),
+      this.vehicleRepository.update(
+        { organizationId, archivedAt: IsNull() },
+        { archivedAt: new Date() },
+      ),
+    ]);
+
+    organization.deletionRequestedAt = new Date();
+    await this.organizationRepository.save(organization);
+  }
+
+  /**
+   * Löscht eine Organisation endgültig (nur globale Administratoren, nur
+   * nachdem der Owner sie selbst über deleteByOwner zur Löschung freigegeben
+   * hat - siehe deletionRequestedAt-Check unten als Sicherheitsschranke).
+   * Mitglieder, Fahrzeuge (und darüber kaskadierend Nutzungen) sowie die
+   * Subscription haben ON DELETE CASCADE und werden automatisch mitgelöscht;
+   * Einladungen haben das nicht und müssen vorher explizit entfernt werden
+   * (siehe OrganizationsInvitesService.deleteAllForOrganization).
+   */
+  async hardDelete(id: string): Promise<void> {
+    const organization = await this.findOne(id);
+
+    if (!organization.deletionRequestedAt) {
+      throw new AppBadRequestException(
+        ErrorCode.ORG_DELETION_NOT_REQUESTED,
+        'Diese Organisation wurde nicht vom Owner zur Löschung freigegeben',
+      );
+    }
+
+    await this.invitesService.deleteAllForOrganization(id);
+    await this.organizationRepository.remove(organization);
   }
 
   /**

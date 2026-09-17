@@ -256,6 +256,17 @@ describe('OrganizationMembersService', () => {
     });
   });
 
+  describe('archiveAllMembers', () => {
+    it('archives every membership of the organization, including the owner', async () => {
+      await service.archiveAllMembers('org-1');
+
+      expect(memberRepository.update).toHaveBeenCalledWith(
+        { organizationId: 'org-1', archivedAt: IsNull() },
+        { archivedAt: expect.any(Date) },
+      );
+    });
+  });
+
   describe('restoreArchivedMembers', () => {
     it('clears archivedAt for every previously archived membership', async () => {
       await service.restoreArchivedMembers('org-1');
