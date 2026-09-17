@@ -41,7 +41,10 @@ export class OrganizationMembersService {
     if (organizationIds.length === 0) return new Map();
 
     const owners = await this.memberRepository.find({
-      where: { organizationId: In(organizationIds), role: OrganizationRole.OWNER },
+      where: {
+        organizationId: In(organizationIds),
+        role: OrganizationRole.OWNER,
+      },
       relations: ['user'],
     });
 
