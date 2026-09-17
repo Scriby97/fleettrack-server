@@ -34,8 +34,24 @@ export class OrganizationGuard implements CanActivate {
       );
     }
 
-    // Administrators have access to all organizations
+    // Administrators have access to all organizations, regardless of
+    // membership. Their real membership (falls sie zusaetzlich z.B. Owner
+    // einer bestimmten Organisation sind) wird trotzdem nachgeschlagen und in
+    // der Request gespeichert, damit nachgelagerter Code (OrganizationRolesGuard,
+    // @CurrentOrganizationMembership()-Controller-Methoden wie transferOwnership)
+    // die echte Rolle sieht statt eine fehlende Mitgliedschaft anzunehmen -
+    // existiert keine (Admin verwaltet eine fremde Organisation), bleibt sie
+    // schlicht ungesetzt und OrganizationRolesGuard faellt auf den reinen
+    // Admin-Bypass zurueck.
     if (user.role === UserRole.ADMINISTRATOR) {
+      if (organizationId) {
+        const membership = await this.memberRepo.findOne({
+          where: { userId: user.id, organizationId, archivedAt: IsNull() },
+        });
+        if (membership) {
+          request.organizationMembership = membership;
+        }
+      }
       return true;
     }
 

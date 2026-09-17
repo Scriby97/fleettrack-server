@@ -1,18 +1,24 @@
 import { ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { OrganizationRolesGuard } from './organization-roles.guard';
-import { OrganizationRole } from '../enums/user-role.enum';
+import { OrganizationRole, UserRole } from '../enums/user-role.enum';
 import { AppForbiddenException } from '../../common/exceptions';
 
 describe('OrganizationRolesGuard', () => {
   let guard: OrganizationRolesGuard;
   let reflector: { get: jest.Mock };
 
-  const makeContext = (membership: { role: OrganizationRole } | undefined) =>
+  const makeContext = (
+    membership: { role: OrganizationRole } | undefined,
+    userRole: UserRole = UserRole.USER,
+  ) =>
     ({
       getHandler: () => ({}),
       switchToHttp: () => ({
-        getRequest: () => ({ organizationMembership: membership }),
+        getRequest: () => ({
+          user: { id: 'user-1', role: userRole },
+          organizationMembership: membership,
+        }),
       }),
     }) as unknown as ExecutionContext;
 
@@ -65,6 +71,18 @@ describe('OrganizationRolesGuard', () => {
     expect(() =>
       guard.canActivate(makeContext({ role: OrganizationRole.ADMIN })),
     ).toThrow(AppForbiddenException);
+  });
+
+  it('allows a global administrator even without an organization membership on the request', () => {
+    // OrganizationGuard bewusst KEIN organizationMembership fuer globale
+    // Administratoren setzt (siehe organization.guard.ts) - ohne diesen
+    // Bypass hier wuerden sie faelschlich als "keine Mitgliedschaft"
+    // abgelehnt, obwohl OrganizationGuard sie bereits durchgelassen hat.
+    reflector.get.mockReturnValue([OrganizationRole.OWNER]);
+
+    expect(
+      guard.canActivate(makeContext(undefined, UserRole.ADMINISTRATOR)),
+    ).toBe(true);
   });
 
   it('allows an employee when EMPLOYEE is the required role', () => {

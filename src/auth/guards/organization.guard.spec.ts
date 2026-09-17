@@ -34,7 +34,7 @@ describe('OrganizationGuard', () => {
     );
   });
 
-  it('lets a global administrator through without checking membership', async () => {
+  it('lets a global administrator through without checking membership when no organizationId is present', async () => {
     const context = makeContext({
       user: { id: 'admin-1', role: UserRole.ADMINISTRATOR },
       params: {},
@@ -42,6 +42,40 @@ describe('OrganizationGuard', () => {
 
     await expect(guard.canActivate(context)).resolves.toBe(true);
     expect(memberRepo.findOne).not.toHaveBeenCalled();
+  });
+
+  it("attaches a global administrator's real membership when one exists for the organization", async () => {
+    // Ein Admin, der zusaetzlich z.B. Owner einer bestimmten Organisation
+    // ist, soll seine echte Rolle sehen - sonst wuerde OrganizationRolesGuard
+    // (der auf request.organizationMembership aufbaut) sie faelschlich nicht
+    // finden, obwohl sie existiert.
+    const membership = {
+      id: 'member-1',
+      userId: 'admin-1',
+      organizationId: 'org-a',
+      role: OrganizationRole.OWNER,
+    };
+    memberRepo.findOne.mockResolvedValue(membership);
+    const request: any = {
+      user: { id: 'admin-1', role: UserRole.ADMINISTRATOR },
+      params: { organizationId: 'org-a' },
+    };
+    const context = makeContext(request);
+
+    await expect(guard.canActivate(context)).resolves.toBe(true);
+    expect(request.organizationMembership).toBe(membership);
+  });
+
+  it('lets a global administrator through even without a real membership in the organization', async () => {
+    memberRepo.findOne.mockResolvedValue(null);
+    const request: any = {
+      user: { id: 'admin-1', role: UserRole.ADMINISTRATOR },
+      params: { organizationId: 'org-a' },
+    };
+    const context = makeContext(request);
+
+    await expect(guard.canActivate(context)).resolves.toBe(true);
+    expect(request.organizationMembership).toBeUndefined();
   });
 
   it('rejects a normal user when no organizationId is present in params or body', async () => {

@@ -1,6 +1,6 @@
 import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { OrganizationRole } from '../enums/user-role.enum';
+import { OrganizationRole, UserRole } from '../enums/user-role.enum';
 import { AppForbiddenException, ErrorCode } from '../../common/exceptions';
 import type { AuthenticatedRequest } from '../decorators/current-user.decorator';
 
@@ -23,6 +23,16 @@ export class OrganizationRolesGuard implements CanActivate {
     }
 
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
+
+    // Globale Administratoren duerfen wie in OrganizationGuard (das fuer sie
+    // bewusst KEIN organizationMembership setzt) jede organisationsscoped
+    // Rollen-Anforderung erfuellen - sonst wuerden sie hier faelschlich als
+    // "keine Mitgliedschaft" abgelehnt, obwohl OrganizationGuard sie bereits
+    // durchgelassen hat.
+    if (request.user?.role === UserRole.ADMINISTRATOR) {
+      return true;
+    }
+
     const membership = request.organizationMembership;
 
     if (!membership) {
