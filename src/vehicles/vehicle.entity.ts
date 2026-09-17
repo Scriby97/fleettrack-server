@@ -42,4 +42,10 @@ export class VehicleEntity {
   @ManyToOne(() => OrganizationEntity, (org) => org.vehicles)
   @JoinColumn({ name: 'organizationId' })
   organization: OrganizationEntity;
+
+  // Gesetzt, wenn das Fahrzeug wegen Nichtzahlung der Organisation
+  // archiviert wurde (NULL = aktiv). Unabhaengig von "isRetired" (manuelles
+  // Ausmustern) - siehe VehiclesService.archiveAll/restoreArchived.
+  @Column({ type: 'timestamp', nullable: true })
+  archivedAt?: Date | null;
 }

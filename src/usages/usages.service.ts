@@ -28,10 +28,14 @@ export class UsagesService {
     if (organizationIds || creatorId) {
       const qb = this.repo
         .createQueryBuilder('usage')
-        .innerJoin('usage.vehicle', 'vehicle');
+        .innerJoin('usage.vehicle', 'vehicle')
+        // Wegen Nichtzahlung archivierte Fahrzeuge sollen mit ihren
+        // Nutzungen aus der Uebersicht verschwinden, bis die Organisation
+        // wieder zahlt (siehe VehiclesService/OrganizationSubscriptionsService).
+        .where('vehicle.archivedAt IS NULL');
 
       if (organizationIds) {
-        qb.where('vehicle.organizationId IN (:...organizationIds)', {
+        qb.andWhere('vehicle.organizationId IN (:...organizationIds)', {
           organizationIds,
         });
       }
@@ -63,10 +67,11 @@ export class UsagesService {
       .createQueryBuilder('usage')
       .innerJoinAndSelect('usage.vehicle', 'vehicle')
       .innerJoinAndSelect('usage.creator', 'creator')
+      .where('vehicle.archivedAt IS NULL')
       .orderBy('usage.creationDate', 'DESC');
 
     if (organizationIds) {
-      queryBuilder.where('vehicle.organizationId IN (:...organizationIds)', {
+      queryBuilder.andWhere('vehicle.organizationId IN (:...organizationIds)', {
         organizationIds,
       });
     }

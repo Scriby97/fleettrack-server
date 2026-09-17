@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { In, IsNull, Not, Repository } from 'typeorm';
 import { OrganizationMemberEntity } from './organization-member.entity';
 import { OrganizationRole } from '../auth/enums/user-role.enum';
 import {
@@ -24,7 +24,7 @@ export class OrganizationMembersService {
     organizationId: string,
   ): Promise<OrganizationMemberEntity[]> {
     return this.memberRepository.find({
-      where: { organizationId },
+      where: { organizationId, archivedAt: IsNull() },
       relations: ['user'],
       order: { joinedAt: 'ASC' },
     });
@@ -44,6 +44,7 @@ export class OrganizationMembersService {
       where: {
         organizationId: In(organizationIds),
         role: OrganizationRole.OWNER,
+        archivedAt: IsNull(),
       },
       relations: ['user'],
     });
@@ -82,7 +83,7 @@ export class OrganizationMembersService {
    */
   async findByUser(userId: string): Promise<OrganizationMemberEntity[]> {
     return this.memberRepository.find({
-      where: { userId },
+      where: { userId, archivedAt: IsNull() },
       relations: ['organization'],
       order: { joinedAt: 'ASC' },
     });
@@ -95,7 +96,7 @@ export class OrganizationMembersService {
    */
   async getOrganizationIds(userId: string): Promise<string[]> {
     const memberships = await this.memberRepository.find({
-      where: { userId },
+      where: { userId, archivedAt: IsNull() },
       select: ['organizationId'],
     });
     return memberships.map((membership) => membership.organizationId);
@@ -110,6 +111,7 @@ export class OrganizationMembersService {
       where: {
         userId,
         role: In([OrganizationRole.ADMIN, OrganizationRole.OWNER]),
+        archivedAt: IsNull(),
       },
       select: ['organizationId'],
     });
@@ -122,7 +124,9 @@ export class OrganizationMembersService {
    * OrganizationsInvitesService.countPendingByOrganization).
    */
   async countByOrganization(organizationId: string): Promise<number> {
-    return this.memberRepository.count({ where: { organizationId } });
+    return this.memberRepository.count({
+      where: { organizationId, archivedAt: IsNull() },
+    });
   }
 
   /**
@@ -132,7 +136,9 @@ export class OrganizationMembersService {
     userId: string,
     organizationId: string,
   ): Promise<OrganizationMemberEntity | null> {
-    return this.memberRepository.findOne({ where: { userId, organizationId } });
+    return this.memberRepository.findOne({
+      where: { userId, organizationId, archivedAt: IsNull() },
+    });
   }
 
   /**
@@ -236,17 +242,39 @@ export class OrganizationMembersService {
   }
 
   /**
-   * Trennt ALLE Mitgliedschaften einer Organisation auf einmal (inkl. Owner) -
+   * Archiviert alle Mitgliedschaften einer Organisation ausser dem Owner -
    * für den Fall, dass eine Organisation über dem kostenlosen Lieutenant-Limit
-   * (Fahrzeuge oder Mitarbeiter) liegt und ihr bezahltes Abo endet (siehe
-   * OrganizationSubscriptionsService.downgradeToFree). Löscht bewusst NUR die
-   * organization_members-Zeilen (die Verbindung User<->Organisation) - keine
-   * Fahrzeuge, Nutzungen oder die Organisation selbst. Alle Daten bleiben
-   * erhalten, nur der Zugriff der User geht verloren. Umgeht bewusst
-   * assertNotLastOwner(), da hier explizit ALLE Mitglieder getrennt werden sollen.
+   * (Fahrzeuge oder Mitarbeiter) liegt und ihr bezahltes Abo endgültig endet
+   * (siehe OrganizationSubscriptionsService.downgradeToFree). Der Owner bleibt
+   * bewusst unangetastet - sonst könnte sich niemand mehr einloggen, um die
+   * Organisation durch erneute Zahlung wiederherzustellen (siehe
+   * restoreArchivedMembers). Setzt nur "archivedAt", löscht nichts - die
+   * Mitgliedschaften (und alle anderen Daten: Fahrzeuge, Nutzungen, die
+   * Organisation selbst) bleiben vollständig erhalten.
    */
-  async removeAllMembers(organizationId: string): Promise<void> {
-    await this.memberRepository.delete({ organizationId });
+  async archiveMembersExceptOwner(organizationId: string): Promise<void> {
+    await this.memberRepository.update(
+      {
+        organizationId,
+        role: Not(OrganizationRole.OWNER),
+        archivedAt: IsNull(),
+      },
+      { archivedAt: new Date() },
+    );
+  }
+
+  /**
+   * Holt alle wegen Nichtzahlung archivierten Mitgliedschaften einer
+   * Organisation zurück - aufgerufen, sobald dieselbe Organisation wieder ein
+   * bezahltes Abo aktiviert (siehe
+   * OrganizationSubscriptionsService.activatePaidTier). Ist nichts archiviert,
+   * ist dieser Aufruf ein No-Op.
+   */
+  async restoreArchivedMembers(organizationId: string): Promise<void> {
+    await this.memberRepository.update(
+      { organizationId, archivedAt: Not(IsNull()) },
+      { archivedAt: null },
+    );
   }
 
   private async findMemberOrThrow(
@@ -254,7 +282,7 @@ export class OrganizationMembersService {
     memberId: string,
   ): Promise<OrganizationMemberEntity> {
     const member = await this.memberRepository.findOne({
-      where: { id: memberId, organizationId },
+      where: { id: memberId, organizationId, archivedAt: IsNull() },
     });
 
     if (!member) {
@@ -269,7 +297,11 @@ export class OrganizationMembersService {
 
   private async assertNotLastOwner(organizationId: string): Promise<void> {
     const ownerCount = await this.memberRepository.count({
-      where: { organizationId, role: OrganizationRole.OWNER },
+      where: {
+        organizationId,
+        role: OrganizationRole.OWNER,
+        archivedAt: IsNull(),
+      },
     });
 
     if (ownerCount <= 1) {

@@ -1,3 +1,4 @@
+import { IsNull } from 'typeorm';
 import { VehiclesService } from './vehicles.service';
 import { AppNotFoundException } from '../common/exceptions';
 
@@ -86,7 +87,11 @@ describe('VehiclesService', () => {
 
       expect(result).toBe(3);
       expect(repo.count).toHaveBeenCalledWith({
-        where: { organizationId: 'org-a', isRetired: false },
+        where: {
+          organizationId: 'org-a',
+          isRetired: false,
+          archivedAt: IsNull(),
+        },
       });
     });
   });
@@ -152,19 +157,21 @@ describe('VehiclesService', () => {
         periodEndHours: null,
         totalFuelLiters: 0,
       });
-      expect(qb.where).toHaveBeenCalledWith(
+      expect(qb.where).toHaveBeenCalledWith('v.archivedAt IS NULL');
+      expect(qb.andWhere).toHaveBeenCalledWith(
         'v.organizationId IN (:...organizationIds)',
         { organizationIds: ['org-a'] },
       );
     });
 
-    it('does not scope the query to an organization for a global administrator', async () => {
+    it('always excludes archived vehicles but does not scope by organization for a global administrator', async () => {
       const qb = createQueryBuilderMock({ rawMany: [] });
       repo.createQueryBuilder.mockReturnValue(qb);
 
       await service.stats(undefined);
 
-      expect(qb.where).not.toHaveBeenCalled();
+      expect(qb.where).toHaveBeenCalledWith('v.archivedAt IS NULL');
+      expect(qb.andWhere).not.toHaveBeenCalled();
     });
 
     it('re-throws and logs when the query fails', async () => {

@@ -1,6 +1,6 @@
 import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import { UserRole } from '../enums/user-role.enum';
 import { OrganizationMemberEntity } from '../../organizations/organization-member.entity';
 import { AppForbiddenException, ErrorCode } from '../../common/exceptions';
@@ -48,10 +48,15 @@ export class OrganizationGuard implements CanActivate {
         );
       }
 
+      // archivedAt: IsNull() - ein wegen Nichtzahlung archiviertes
+      // Nicht-Owner-Mitglied verliert damit auch den API-Zugriff, nicht nur
+      // die Sichtbarkeit in Listen (der Owner selbst wird nie archiviert,
+      // siehe OrganizationMembersService.archiveMembersExceptOwner).
       const membership = await this.memberRepo.findOne({
         where: {
           userId: user.id,
           organizationId,
+          archivedAt: IsNull(),
         },
       });
 

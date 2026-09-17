@@ -51,4 +51,10 @@ export class OrganizationMemberEntity {
 
   @CreateDateColumn()
   joinedAt: Date;
+
+  // Gesetzt, wenn die Mitgliedschaft wegen Nichtzahlung der Organisation
+  // archiviert wurde (NULL = aktiv) - siehe
+  // OrganizationMembersService.archiveMembersExceptOwner/restoreArchivedMembers.
+  @Column({ type: 'timestamp', nullable: true })
+  archivedAt?: Date | null;
 }

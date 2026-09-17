@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { IsNull, Not } from 'typeorm';
 import { OrganizationMembersService } from './organization-members.service';
 import { OrganizationMemberEntity } from './organization-member.entity';
 import { OrganizationRole } from '../auth/enums/user-role.enum';
@@ -22,6 +23,7 @@ describe('OrganizationMembersService', () => {
     findOne: jest.fn(),
     count: jest.fn(),
     remove: jest.fn(),
+    update: jest.fn(),
     save: jest.fn((data) => Promise.resolve(data)),
     manager: {
       transaction: jest.fn((cb) =>
@@ -236,6 +238,32 @@ describe('OrganizationMembersService', () => {
         currentOwner,
         newOwner,
       ]);
+    });
+  });
+
+  describe('archiveMembersExceptOwner', () => {
+    it('archives every non-owner membership but leaves the owner untouched', async () => {
+      await service.archiveMembersExceptOwner('org-1');
+
+      expect(memberRepository.update).toHaveBeenCalledWith(
+        {
+          organizationId: 'org-1',
+          role: Not(OrganizationRole.OWNER),
+          archivedAt: IsNull(),
+        },
+        { archivedAt: expect.any(Date) },
+      );
+    });
+  });
+
+  describe('restoreArchivedMembers', () => {
+    it('clears archivedAt for every previously archived membership', async () => {
+      await service.restoreArchivedMembers('org-1');
+
+      expect(memberRepository.update).toHaveBeenCalledWith(
+        { organizationId: 'org-1', archivedAt: Not(IsNull()) },
+        { archivedAt: null },
+      );
     });
   });
 });

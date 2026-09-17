@@ -55,11 +55,11 @@ describe('UsagesService', () => {
       const result = await service.findAll(['org-a']);
 
       expect(result).toEqual([{ id: 'u1' }]);
-      expect(qb.where).toHaveBeenCalledWith(
+      expect(qb.where).toHaveBeenCalledWith('vehicle.archivedAt IS NULL');
+      expect(qb.andWhere).toHaveBeenCalledWith(
         'vehicle.organizationId IN (:...organizationIds)',
         { organizationIds: ['org-a'] },
       );
-      expect(qb.andWhere).not.toHaveBeenCalled();
     });
 
     it('additionally restricts to the creator when creatorId is given', async () => {

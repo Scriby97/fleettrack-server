@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Not, Repository } from 'typeorm';
 import { OrganizationSubscriptionEntity } from './organization-subscription.entity';
 import { OrganizationMembersService } from './organization-members.service';
 import { VehicleEntity } from '../vehicles/vehicle.entity';
@@ -131,7 +131,20 @@ export class OrganizationSubscriptionsService {
     subscription.status = SubscriptionStatus.ACTIVE;
     subscription.stripeCustomerId = stripeCustomerId;
     subscription.stripeSubscriptionId = stripeSubscriptionId;
-    return this.subscriptionRepository.save(subscription);
+    const saved = await this.subscriptionRepository.save(subscription);
+
+    // Zahlt dieselbe Organisation wieder, kommen wegen Nichtzahlung
+    // archivierte Mitglieder/Fahrzeuge automatisch zurück (siehe
+    // downgradeToFree). Ist nichts archiviert, sind das No-Ops.
+    await Promise.all([
+      this.membersService.restoreArchivedMembers(organizationId),
+      this.vehicleRepository.update(
+        { organizationId, archivedAt: Not(IsNull()) },
+        { archivedAt: null },
+      ),
+    ]);
+
+    return saved;
   }
 
   /**
@@ -186,11 +199,15 @@ export class OrganizationSubscriptionsService {
    *
    * Liegt die Organisation zu diesem Zeitpunkt über dem kostenlosen
    * Lieutenant-Limit (mehr aktive Fahrzeuge oder Mitarbeiter als erlaubt),
-   * werden zusätzlich ALLE Mitgliedschaften getrennt (siehe removeAllMembers) -
-   * die Organisation und alle ihre Daten bleiben dabei vollständig erhalten,
-   * nur der Zugriff der User geht verloren. Der Live-Check hier (statt zum
-   * Zeitpunkt der Kündigung) ist bewusst: reduziert der Owner die Anzahl vor
-   * Ablauf der Abrechnungsperiode selbst wieder unters Limit (z.B. Fahrzeuge
+   * werden zusätzlich alle Mitgliedschaften ausser dem Owner sowie alle
+   * Fahrzeuge archiviert (siehe
+   * OrganizationMembersService.archiveMembersExceptOwner) - die Organisation
+   * und alle ihre Daten bleiben dabei vollständig erhalten, nur der Zugriff
+   * geht verloren. Der Owner bleibt bewusst Mitglied, damit er sich weiterhin
+   * einloggen und die Organisation durch erneute Zahlung wiederherstellen
+   * kann (siehe activatePaidTier). Der Live-Check hier (statt zum Zeitpunkt
+   * der Kündigung) ist bewusst: reduziert der Owner die Anzahl vor Ablauf der
+   * Abrechnungsperiode selbst wieder unters Limit (z.B. Fahrzeuge
    * ausrangieren), bleibt die Organisation verbunden.
    */
   async downgradeToFree(
@@ -204,11 +221,17 @@ export class OrganizationSubscriptionsService {
 
     const limitStatus = await this.getFreeLimitStatus(organizationId);
     if (limitStatus.overLimit) {
-      await this.membersService.removeAllMembers(organizationId);
+      await Promise.all([
+        this.membersService.archiveMembersExceptOwner(organizationId),
+        this.vehicleRepository.update(
+          { organizationId, archivedAt: IsNull() },
+          { archivedAt: new Date() },
+        ),
+      ]);
       this.logger.warn(
         `Organisation ${organizationId} lag beim Downgrade auf Lieutenant über dem Free-Limit ` +
           `(Fahrzeuge=${limitStatus.vehicleCount}, Mitarbeiter=${limitStatus.memberCount}) - ` +
-          `alle Mitgliedschaften getrennt, Daten bleiben erhalten.`,
+          `Mitglieder (ausser Owner) und Fahrzeuge archiviert, Daten bleiben erhalten.`,
       );
     }
 
@@ -226,7 +249,7 @@ export class OrganizationSubscriptionsService {
 
     const [vehicleCount, memberCount] = await Promise.all([
       this.vehicleRepository.count({
-        where: { organizationId, isRetired: false },
+        where: { organizationId, isRetired: false, archivedAt: IsNull() },
       }),
       this.membersService.countByOrganization(organizationId),
     ]);

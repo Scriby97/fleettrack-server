@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, FindOptionsWhere, In, Repository } from 'typeorm';
+import { Between, FindOptionsWhere, In, IsNull, Repository } from 'typeorm';
 import { VehicleEntity } from './vehicle.entity';
 import { UsageEntity } from '../usages/usage.entity';
 import { AppNotFoundException, ErrorCode } from '../common/exceptions';
@@ -86,6 +86,7 @@ export class VehiclesService {
   async findAll(
     organizationIds?: string[],
     includeRetired = false,
+    includeArchived = false,
   ): Promise<Vehicle[]> {
     if (organizationIds && organizationIds.length === 0) {
       return [];
@@ -99,6 +100,10 @@ export class VehiclesService {
 
     if (!includeRetired) {
       where.isRetired = false;
+    }
+
+    if (!includeArchived) {
+      where.archivedAt = IsNull();
     }
 
     return this.repo.find({ where });
@@ -116,7 +121,9 @@ export class VehiclesService {
    * die Durchsetzung des maxVehicles-Tarif-Limits.
    */
   async countActive(organizationId: string): Promise<number> {
-    return this.repo.count({ where: { organizationId, isRetired: false } });
+    return this.repo.count({
+      where: { organizationId, isRetired: false, archivedAt: IsNull() },
+    });
   }
 
   async create(
@@ -180,11 +187,14 @@ export class VehiclesService {
         ])
         .groupBy(
           'v.id, v.name, v.plate, v.snowsatNumber, v.isRetired, v.location, v.vehicleType, v.fuelType, v.notes, v.organizationId',
-        );
+        )
+        // Wegen Nichtzahlung archivierte Fahrzeuge sollen aus der
+        // Flottenansicht verschwinden, bis die Organisation wieder zahlt.
+        .where('v.archivedAt IS NULL');
 
       // Filter by organization if provided
       if (organizationIds) {
-        qb.where('v.organizationId IN (:...organizationIds)', {
+        qb.andWhere('v.organizationId IN (:...organizationIds)', {
           organizationIds,
         });
       }

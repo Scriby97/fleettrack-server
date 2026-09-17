@@ -1,4 +1,5 @@
 import { ExecutionContext } from '@nestjs/common';
+import { IsNull } from 'typeorm';
 import { OrganizationGuard } from './organization.guard';
 import { UserRole } from '../enums/user-role.enum';
 import { OrganizationRole } from '../enums/user-role.enum';
@@ -98,7 +99,11 @@ describe('OrganizationGuard', () => {
 
     await expect(guard.canActivate(context)).resolves.toBe(true);
     expect(memberRepo.findOne).toHaveBeenCalledWith({
-      where: { userId: 'user-1', organizationId: 'org-b' },
+      where: {
+        userId: 'user-1',
+        organizationId: 'org-b',
+        archivedAt: IsNull(),
+      },
     });
   });
 });
