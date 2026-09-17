@@ -159,7 +159,8 @@ export class BillingController {
       return;
     }
 
-    const priceId = subscription.items.data[0]?.price?.id;
+    const item = subscription.items.data[0];
+    const priceId = item?.price?.id;
     const tier =
       this.stripeService.getTierForPriceId(priceId) ??
       (subscription.metadata?.tier as SubscriptionTier | undefined);
@@ -171,10 +172,15 @@ export class BillingController {
       return;
     }
 
+    // Ab dieser Stripe-API-Version sitzt current_period_start/end nicht mehr
+    // direkt auf der Subscription, sondern pro Subscription-Item (siehe
+    // SubscriptionItems.d.ts) - wie priceId oben vom ersten Item gelesen.
     await this.subscriptionsService.syncFromStripeSubscription(
       organizationId,
       tier,
       subscription.status,
+      item ? new Date(item.current_period_start * 1000) : undefined,
+      item ? new Date(item.current_period_end * 1000) : undefined,
     );
 
     this.logger.log(
