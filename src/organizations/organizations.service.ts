@@ -182,10 +182,26 @@ export class OrganizationsService {
     return { organization: savedOrganization, subscription };
   }
 
-  async findAll(): Promise<OrganizationEntity[]> {
-    return await this.organizationRepository.find({
+  /**
+   * Für die Admin-Organisationsübersicht: Abo-Status/Tarif und Owner-Kontakt
+   * gleich mitliefern, damit ein Admin bei hängenden past_due-Fällen manuell
+   * nachfassen kann (solange es noch keinen automatischen E-Mail-Versand
+   * gibt).
+   */
+  async findAll(): Promise<
+    (OrganizationEntity & { owner: { email: string; name?: string } | null })[]
+  > {
+    const organizations = await this.organizationRepository.find({
       where: { isActive: true },
+      relations: ['subscription'],
     });
+    const owners = await this.membersService.findOwners(
+      organizations.map((org) => org.id),
+    );
+    return organizations.map((org) => ({
+      ...org,
+      owner: owners.get(org.id) ?? null,
+    }));
   }
 
   async findOne(id: string): Promise<OrganizationEntity> {

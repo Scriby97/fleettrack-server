@@ -31,6 +31,35 @@ export class OrganizationMembersService {
   }
 
   /**
+   * Owner (Name + Email) für mehrere Organisationen auf einmal, für die
+   * Admin-Organisationsübersicht - vermeidet eine Einzelabfrage pro
+   * Organisation.
+   */
+  async findOwners(
+    organizationIds: string[],
+  ): Promise<Map<string, { email: string; name?: string }>> {
+    if (organizationIds.length === 0) return new Map();
+
+    const owners = await this.memberRepository.find({
+      where: { organizationId: In(organizationIds), role: OrganizationRole.OWNER },
+      relations: ['user'],
+    });
+
+    return new Map(
+      owners.map((member) => [
+        member.organizationId,
+        {
+          email: member.user.email,
+          name:
+            [member.user.firstName, member.user.lastName]
+              .filter(Boolean)
+              .join(' ') || undefined,
+        },
+      ]),
+    );
+  }
+
+  /**
    * Fügt einen User als Owner einer Organisation hinzu (Self-Service-Erstellung)
    */
   async addOwner(
