@@ -24,7 +24,10 @@ describe('AuthService', () => {
       providers: [
         AuthService,
         { provide: SupabaseService, useValue: {} },
-        { provide: getRepositoryToken(UserProfileEntity), useValue: profileRepo },
+        {
+          provide: getRepositoryToken(UserProfileEntity),
+          useValue: profileRepo,
+        },
         {
           provide: getRepositoryToken(OrganizationMemberEntity),
           useValue: memberRepo,

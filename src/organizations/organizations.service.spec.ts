@@ -7,7 +7,10 @@ import { VehicleEntity } from '../vehicles/vehicle.entity';
 import { OrganizationsInvitesService } from './organizations-invites.service';
 import { OrganizationSubscriptionsService } from './organization-subscriptions.service';
 import { OrganizationMembersService } from './organization-members.service';
-import { AppBadRequestException, AppNotFoundException } from '../common/exceptions';
+import {
+  AppBadRequestException,
+  AppNotFoundException,
+} from '../common/exceptions';
 
 describe('OrganizationsService', () => {
   let service: OrganizationsService;
@@ -102,9 +105,7 @@ describe('OrganizationsService', () => {
       expect(invitesService.deleteAllForOrganization).toHaveBeenCalledWith(
         'org-1',
       );
-      expect(organizationRepository.remove).toHaveBeenCalledWith(
-        organization,
-      );
+      expect(organizationRepository.remove).toHaveBeenCalledWith(organization);
     });
   });
 });
