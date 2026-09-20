@@ -23,6 +23,7 @@ import {
   AppNotFoundException,
   ErrorCode,
 } from '../common/exceptions';
+import { parseOptionalDateRange } from '../common/utils/date-range.util';
 
 @Controller('vehicles')
 export class VehiclesController {
@@ -94,29 +95,10 @@ export class VehiclesController {
     @Query('endDate') endDateParam?: string,
   ) {
     const organizationIds = await this.resolveOrganizationIds(user, queryOrgId);
-
-    if (Boolean(startDateParam) !== Boolean(endDateParam)) {
-      throw new AppBadRequestException(
-        ErrorCode.VALIDATION_BAD_REQUEST_GENERIC,
-        'startDate and endDate must be provided together',
-      );
-    }
-
-    let startDate: Date | undefined;
-    let endDate: Date | undefined;
-    if (startDateParam && endDateParam) {
-      startDate = new Date(startDateParam);
-      endDate = new Date(endDateParam);
-      if (
-        Number.isNaN(startDate.getTime()) ||
-        Number.isNaN(endDate.getTime())
-      ) {
-        throw new AppBadRequestException(
-          ErrorCode.VALIDATION_BAD_REQUEST_GENERIC,
-          'startDate/endDate must be valid dates',
-        );
-      }
-    }
+    const { startDate, endDate } = parseOptionalDateRange(
+      startDateParam,
+      endDateParam,
+    );
 
     return this.vehiclesService.stats(organizationIds, startDate, endDate);
   }
@@ -176,28 +158,10 @@ export class VehiclesController {
       }
     }
 
-    if (Boolean(startDateParam) !== Boolean(endDateParam)) {
-      throw new AppBadRequestException(
-        ErrorCode.VALIDATION_BAD_REQUEST_GENERIC,
-        'startDate and endDate must be provided together',
-      );
-    }
-
-    let startDate: Date | undefined;
-    let endDate: Date | undefined;
-    if (startDateParam && endDateParam) {
-      startDate = new Date(startDateParam);
-      endDate = new Date(endDateParam);
-      if (
-        Number.isNaN(startDate.getTime()) ||
-        Number.isNaN(endDate.getTime())
-      ) {
-        throw new AppBadRequestException(
-          ErrorCode.VALIDATION_BAD_REQUEST_GENERIC,
-          'startDate/endDate must be valid dates',
-        );
-      }
-    }
+    const { startDate, endDate } = parseOptionalDateRange(
+      startDateParam,
+      endDateParam,
+    );
 
     return this.vehiclesService.usageHistory(vehicleId, startDate, endDate);
   }

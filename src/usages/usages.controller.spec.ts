@@ -7,6 +7,7 @@ import { UserRole, OrganizationRole } from '../auth/enums/user-role.enum';
 import type { AuthUser } from '../auth/decorators/current-user.decorator';
 import type { CreateUsageDto } from './dto/create-usage.dto';
 import type { UpdateUsageDto } from './dto/update-usage.dto';
+import { encodeUsageCursor, MAX_USAGES_PAGE_SIZE } from './usage-cursor.util';
 import {
   AppForbiddenException,
   AppNotFoundException,
@@ -58,7 +59,12 @@ describe('UsagesController', () => {
 
       await controller.getAll(adminUser);
 
-      expect(usagesService.findAll).toHaveBeenCalledWith(undefined, undefined);
+      expect(usagesService.findAll).toHaveBeenCalledWith(
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+      );
     });
 
     it('restricts an employee to their own usages', async () => {
@@ -73,6 +79,8 @@ describe('UsagesController', () => {
       expect(usagesService.findAll).toHaveBeenCalledWith(
         ['org-a'],
         employee.id,
+        undefined,
+        undefined,
       );
     });
 
@@ -85,7 +93,158 @@ describe('UsagesController', () => {
 
       await controller.getAll(orgAdmin);
 
-      expect(usagesService.findAll).toHaveBeenCalledWith(['org-a'], undefined);
+      expect(usagesService.findAll).toHaveBeenCalledWith(
+        ['org-a'],
+        undefined,
+        undefined,
+        undefined,
+      );
+    });
+  });
+
+  describe('getAll (date range)', () => {
+    it('parses and forwards a valid startDate/endDate pair', async () => {
+      usagesService.findAll.mockResolvedValue([]);
+
+      await controller.getAll(
+        adminUser,
+        undefined,
+        '2025-01-01T00:00:00.000Z',
+        '2025-01-31T00:00:00.000Z',
+      );
+
+      expect(usagesService.findAll).toHaveBeenCalledWith(
+        undefined,
+        undefined,
+        new Date('2025-01-01T00:00:00.000Z'),
+        new Date('2025-01-31T00:00:00.000Z'),
+      );
+    });
+
+    it('rejects startDate without endDate', async () => {
+      await expect(
+        controller.getAll(adminUser, undefined, '2025-01-01T00:00:00.000Z'),
+      ).rejects.toThrow();
+      expect(usagesService.findAll).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getAllWithVehicles (date range)', () => {
+    it('parses and forwards a valid startDate/endDate pair', async () => {
+      usagesService.findAllWithVehicles.mockResolvedValue({
+        usages: [],
+        nextCursor: null,
+      });
+
+      await controller.getAllWithVehicles(
+        adminUser,
+        undefined,
+        '2025-01-01T00:00:00.000Z',
+        '2025-01-31T00:00:00.000Z',
+      );
+
+      expect(usagesService.findAllWithVehicles).toHaveBeenCalledWith(
+        undefined,
+        undefined,
+        new Date('2025-01-01T00:00:00.000Z'),
+        new Date('2025-01-31T00:00:00.000Z'),
+        undefined,
+        undefined,
+      );
+    });
+  });
+
+  describe('getAllWithVehicles (pagination)', () => {
+    it('forwards the response of the service unchanged ({ usages, nextCursor })', async () => {
+      const page = { usages: [{ id: 'u1' }], nextCursor: 'abc' };
+      usagesService.findAllWithVehicles.mockResolvedValue(page);
+
+      const result = await controller.getAllWithVehicles(adminUser);
+
+      expect(result).toBe(page);
+    });
+
+    it('parses limit and decodes the cursor', async () => {
+      usagesService.findAllWithVehicles.mockResolvedValue({
+        usages: [],
+        nextCursor: null,
+      });
+      const cursor = encodeUsageCursor({
+        usageDate: new Date('2025-01-02T00:00:00.000Z'),
+        id: 'u2',
+      });
+
+      await controller.getAllWithVehicles(
+        adminUser,
+        undefined,
+        undefined,
+        undefined,
+        '10',
+        cursor,
+      );
+
+      expect(usagesService.findAllWithVehicles).toHaveBeenCalledWith(
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        10,
+        { usageDate: new Date('2025-01-02T00:00:00.000Z'), id: 'u2' },
+      );
+    });
+
+    it('caps limit at the maximum page size', async () => {
+      usagesService.findAllWithVehicles.mockResolvedValue({
+        usages: [],
+        nextCursor: null,
+      });
+
+      await controller.getAllWithVehicles(
+        adminUser,
+        undefined,
+        undefined,
+        undefined,
+        '100000',
+      );
+
+      expect(usagesService.findAllWithVehicles).toHaveBeenCalledWith(
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        MAX_USAGES_PAGE_SIZE,
+        undefined,
+      );
+    });
+
+    it.each(['0', '-3', 'abc', '1.5'])(
+      'rejects invalid limit %s',
+      async (limit) => {
+        await expect(
+          controller.getAllWithVehicles(
+            adminUser,
+            undefined,
+            undefined,
+            undefined,
+            limit,
+          ),
+        ).rejects.toThrow();
+        expect(usagesService.findAllWithVehicles).not.toHaveBeenCalled();
+      },
+    );
+
+    it('rejects a malformed cursor', async () => {
+      await expect(
+        controller.getAllWithVehicles(
+          adminUser,
+          undefined,
+          undefined,
+          undefined,
+          '10',
+          'not-a-cursor',
+        ),
+      ).rejects.toThrow();
+      expect(usagesService.findAllWithVehicles).not.toHaveBeenCalled();
     });
   });
 

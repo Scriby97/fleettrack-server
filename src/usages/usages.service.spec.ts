@@ -1,11 +1,14 @@
 import { UsagesService } from './usages.service';
 import { AppNotFoundException } from '../common/exceptions';
+import { decodeUsageCursor } from './usage-cursor.util';
 
 function createQueryBuilderMock(getManyResult: any[] = []) {
   const qb: any = {
     innerJoin: jest.fn(() => qb),
     innerJoinAndSelect: jest.fn(() => qb),
     orderBy: jest.fn(() => qb),
+    addOrderBy: jest.fn(() => qb),
+    limit: jest.fn(() => qb),
     where: jest.fn(() => qb),
     andWhere: jest.fn(() => qb),
     getMany: jest.fn(() => Promise.resolve(getManyResult)),
@@ -72,13 +75,38 @@ describe('UsagesService', () => {
         creatorId: 'user-1',
       });
     });
+
+    it('restricts to a date range via the query builder when both startDate and endDate are given', async () => {
+      const qb = createQueryBuilderMock([]);
+      repo.createQueryBuilder.mockReturnValue(qb);
+      const startDate = new Date('2025-01-01');
+      const endDate = new Date('2025-01-31');
+
+      await service.findAll(undefined, undefined, startDate, endDate);
+
+      expect(repo.createQueryBuilder).toHaveBeenCalled();
+      expect(repo.find).not.toHaveBeenCalled();
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'usage.usageDate >= :startDate AND usage.usageDate <= :endDate',
+        { startDate, endDate },
+      );
+    });
+
+    it('ignores a one-sided date range (falls back to the unfiltered admin path)', async () => {
+      repo.find.mockResolvedValue([{ id: 'u1' }]);
+
+      const result = await service.findAll(undefined, undefined, new Date());
+
+      expect(result).toEqual([{ id: 'u1' }]);
+      expect(repo.createQueryBuilder).not.toHaveBeenCalled();
+    });
   });
 
   describe('findAllWithVehicles', () => {
     it('returns an empty array without querying when given an empty organizationIds array', async () => {
       const result = await service.findAllWithVehicles([]);
 
-      expect(result).toEqual([]);
+      expect(result).toEqual({ usages: [], nextCursor: null });
       expect(repo.createQueryBuilder).not.toHaveBeenCalled();
     });
 
@@ -111,7 +139,8 @@ describe('UsagesService', () => {
 
       const result = await service.findAllWithVehicles();
 
-      expect(result).toEqual([
+      expect(result.nextCursor).toBeNull();
+      expect(result.usages).toEqual([
         {
           id: 'u1',
           vehicleId: 'v1',
@@ -135,6 +164,127 @@ describe('UsagesService', () => {
           },
         },
       ]);
+    });
+
+    it('restricts to a date range via the query builder when both startDate and endDate are given', async () => {
+      const qb = createQueryBuilderMock([]);
+      repo.createQueryBuilder.mockReturnValue(qb);
+      const startDate = new Date('2025-01-01');
+      const endDate = new Date('2025-01-31');
+
+      await service.findAllWithVehicles(
+        undefined,
+        undefined,
+        startDate,
+        endDate,
+      );
+
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'usage.usageDate >= :startDate AND usage.usageDate <= :endDate',
+        { startDate, endDate },
+      );
+    });
+
+    describe('pagination', () => {
+      const makeUsage = (id: string, usageDate: string) => ({
+        id,
+        vehicleId: 'v1',
+        creatorId: 'c1',
+        startOperatingHours: 1,
+        endOperatingHours: 2,
+        fuelLitersRefilled: 0,
+        creationDate: 1,
+        usageDate: new Date(usageDate),
+        vehicle: { id: 'v1', name: 'V', plate: 'P', vehicleType: 'T' },
+        creator: { id: 'c1', firstName: 'A', lastName: 'B', email: 'a@b.c' },
+      });
+
+      it('orders newest first with id as tiebreaker', async () => {
+        const qb = createQueryBuilderMock([]);
+        repo.createQueryBuilder.mockReturnValue(qb);
+
+        await service.findAllWithVehicles(['org-a']);
+
+        expect(qb.orderBy).toHaveBeenCalledWith('usage.usageDate', 'DESC');
+        expect(qb.addOrderBy).toHaveBeenCalledWith('usage.id', 'DESC');
+      });
+
+      it('does not limit and returns no cursor when no limit is given', async () => {
+        const qb = createQueryBuilderMock([
+          makeUsage('u1', '2025-01-02'),
+          makeUsage('u2', '2025-01-01'),
+        ]);
+        repo.createQueryBuilder.mockReturnValue(qb);
+
+        const result = await service.findAllWithVehicles(['org-a']);
+
+        expect(qb.limit).not.toHaveBeenCalled();
+        expect(result.usages).toHaveLength(2);
+        expect(result.nextCursor).toBeNull();
+      });
+
+      it('fetches limit+1 rows and returns a cursor for the last returned row when more exist', async () => {
+        const qb = createQueryBuilderMock([
+          makeUsage('u3', '2025-01-03'),
+          makeUsage('u2', '2025-01-02'),
+          makeUsage('u1', '2025-01-01'),
+        ]);
+        repo.createQueryBuilder.mockReturnValue(qb);
+
+        const result = await service.findAllWithVehicles(
+          ['org-a'],
+          undefined,
+          undefined,
+          undefined,
+          2,
+        );
+
+        expect(qb.limit).toHaveBeenCalledWith(3);
+        expect(result.usages.map((u) => u.id)).toEqual(['u3', 'u2']);
+        expect(decodeUsageCursor(result.nextCursor as string)).toEqual({
+          usageDate: new Date('2025-01-02'),
+          id: 'u2',
+        });
+      });
+
+      it('returns no cursor on the last page', async () => {
+        const qb = createQueryBuilderMock([
+          makeUsage('u2', '2025-01-02'),
+          makeUsage('u1', '2025-01-01'),
+        ]);
+        repo.createQueryBuilder.mockReturnValue(qb);
+
+        const result = await service.findAllWithVehicles(
+          ['org-a'],
+          undefined,
+          undefined,
+          undefined,
+          2,
+        );
+
+        expect(result.usages).toHaveLength(2);
+        expect(result.nextCursor).toBeNull();
+      });
+
+      it('continues after the given cursor via a keyset comparison', async () => {
+        const qb = createQueryBuilderMock([]);
+        repo.createQueryBuilder.mockReturnValue(qb);
+        const cursor = { usageDate: new Date('2025-01-02'), id: 'u2' };
+
+        await service.findAllWithVehicles(
+          ['org-a'],
+          undefined,
+          undefined,
+          undefined,
+          10,
+          cursor,
+        );
+
+        expect(qb.andWhere).toHaveBeenCalledWith(
+          '(usage.usageDate, usage.id) < (:cursorDate, CAST(:cursorId AS uuid))',
+          { cursorDate: cursor.usageDate, cursorId: 'u2' },
+        );
+      });
     });
   });
 

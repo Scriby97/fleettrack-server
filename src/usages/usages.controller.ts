@@ -22,6 +22,8 @@ import {
   AppNotFoundException,
   ErrorCode,
 } from '../common/exceptions';
+import { parseOptionalDateRange } from '../common/utils/date-range.util';
+import { decodeUsageCursor, parseOptionalLimit } from './usage-cursor.util';
 
 @Controller('usages')
 export class UsagesController {
@@ -103,19 +105,38 @@ export class UsagesController {
    * Administratoren sehen alle Usages oder können mit ?organizationId=... filtern.
    * Admin/Owner einer Organisation sehen alle Usages dieser Organisation,
    * Mitarbeiter (employee) nur ihre eigenen.
+   * Optional ?startDate=...&endDate=... (ISO-Datetime, nur zusammen) fuer die
+   * Zeitraum-Filterung nach usageDate.
+   * Optional ?limit=...&cursor=... fuer Cursor-Pagination (neueste zuerst): die
+   * Antwort enthaelt { usages, nextCursor } - nextCursor (null = letzte Seite)
+   * wird beim naechsten Aufruf als ?cursor= mitgegeben. Ohne limit werden alle
+   * Treffer geliefert (Kalenderansicht, dort ist der Zeitraum ein Monat/eine Woche).
    */
   @Get('with-vehicles')
   async getAllWithVehicles(
     @CurrentUser() user: AuthUser,
     @Query('organizationId') queryOrgId?: string,
+    @Query('startDate') startDateParam?: string,
+    @Query('endDate') endDateParam?: string,
+    @Query('limit') limitParam?: string,
+    @Query('cursor') cursorParam?: string,
   ) {
     const organizationIds = await this.resolveOrganizationIds(user, queryOrgId);
     const creatorId = await this.resolveCreatorIdFilter(user, organizationIds);
-    const usages = await this.usagesService.findAllWithVehicles(
+    const { startDate, endDate } = parseOptionalDateRange(
+      startDateParam,
+      endDateParam,
+    );
+    const limit = parseOptionalLimit(limitParam);
+    const cursor = cursorParam ? decodeUsageCursor(cursorParam) : undefined;
+    return this.usagesService.findAllWithVehicles(
       organizationIds,
       creatorId,
+      startDate,
+      endDate,
+      limit,
+      cursor,
     );
-    return { usages };
   }
 
   /**
@@ -124,15 +145,28 @@ export class UsagesController {
    * Administratoren sehen alle Usages oder können mit ?organizationId=... filtern.
    * Admin/Owner einer Organisation sehen alle Usages dieser Organisation,
    * Mitarbeiter (employee) nur ihre eigenen.
+   * Optional ?startDate=...&endDate=... (ISO-Datetime, nur zusammen) fuer die
+   * Zeitraum-Filterung nach usageDate - ohne Angabe komplette Historie.
    */
   @Get()
   async getAll(
     @CurrentUser() user: AuthUser,
     @Query('organizationId') queryOrgId?: string,
+    @Query('startDate') startDateParam?: string,
+    @Query('endDate') endDateParam?: string,
   ) {
     const organizationIds = await this.resolveOrganizationIds(user, queryOrgId);
     const creatorId = await this.resolveCreatorIdFilter(user, organizationIds);
-    return this.usagesService.findAll(organizationIds, creatorId);
+    const { startDate, endDate } = parseOptionalDateRange(
+      startDateParam,
+      endDateParam,
+    );
+    return this.usagesService.findAll(
+      organizationIds,
+      creatorId,
+      startDate,
+      endDate,
+    );
   }
 
   /**

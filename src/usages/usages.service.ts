@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DeepPartial } from 'typeorm';
 import { UsageEntity } from './usage.entity';
 import { AppNotFoundException, ErrorCode } from '../common/exceptions';
+import { encodeUsageCursor, type UsageCursor } from './usage-cursor.util';
 
 @Injectable()
 export class UsagesService {
@@ -16,16 +17,20 @@ export class UsagesService {
    * Uses JOIN with vehicles table since usages don't have direct organizationId
    * @param organizationIds - undefined = kein Filter (nur Administratoren), leeres Array = keine Organisation -> keine Usages
    * @param creatorId - falls gesetzt (normale Mitarbeiter ohne Admin/Owner-Rolle), zusätzlich auf die eigenen Usages einschränken
+   * @param startDate/endDate - optional, beide zusammen: nur Nutzungen mit usageDate in diesem Zeitraum
+   *   (skaliert die Liste sonst unbegrenzt mit der gesamten Historie - siehe idx_usages_vehicle_usage_date)
    */
   async findAll(
     organizationIds?: string[],
     creatorId?: string,
+    startDate?: Date,
+    endDate?: Date,
   ): Promise<UsageEntity[]> {
     if (organizationIds && organizationIds.length === 0) {
       return [];
     }
 
-    if (organizationIds || creatorId) {
+    if (organizationIds || creatorId || (startDate && endDate)) {
       const qb = this.repo
         .createQueryBuilder('usage')
         .innerJoin('usage.vehicle', 'vehicle')
@@ -42,10 +47,19 @@ export class UsagesService {
       if (creatorId) {
         qb.andWhere('usage.creatorId = :creatorId', { creatorId });
       }
+      if (startDate && endDate) {
+        qb.andWhere(
+          'usage.usageDate >= :startDate AND usage.usageDate <= :endDate',
+          {
+            startDate,
+            endDate,
+          },
+        );
+      }
 
       return qb.getMany();
     }
-    // Administrator ohne Organisations-Filter sieht alle Usages
+    // Administrator ohne Organisations-/Zeitraum-Filter sieht alle Usages
     return this.repo.find();
   }
 
@@ -54,13 +68,22 @@ export class UsagesService {
    * Returns usages with nested vehicle information (id, name, plate)
    * @param organizationIds - undefined = kein Filter (nur Administratoren), leeres Array = keine Organisation -> keine Usages
    * @param creatorId - falls gesetzt (normale Mitarbeiter ohne Admin/Owner-Rolle), zusätzlich auf die eigenen Usages einschränken
+   * @param startDate/endDate - optional, beide zusammen: nur Nutzungen mit usageDate in diesem Zeitraum
+   * @param limit - optional: Seitengroesse (neueste zuerst). Ohne limit werden alle Treffer geliefert
+   *   (z.B. fuer die Kalenderansicht, die ohnehin auf einen Zeitraum begrenzt ist).
+   * @param cursor - optional: Position der letzten bereits geladenen Nutzung (usageDate, id) -
+   *   liefert die naechsten Eintraege danach. Stabil auch, wenn zwischenzeitlich neue Nutzungen erfasst werden.
    */
   async findAllWithVehicles(
     organizationIds?: string[],
     creatorId?: string,
-  ): Promise<any[]> {
+    startDate?: Date,
+    endDate?: Date,
+    limit?: number,
+    cursor?: UsageCursor,
+  ): Promise<{ usages: any[]; nextCursor: string | null }> {
     if (organizationIds && organizationIds.length === 0) {
-      return [];
+      return { usages: [], nextCursor: null };
     }
 
     const queryBuilder = this.repo
@@ -68,7 +91,8 @@ export class UsagesService {
       .innerJoinAndSelect('usage.vehicle', 'vehicle')
       .innerJoinAndSelect('usage.creator', 'creator')
       .where('vehicle.archivedAt IS NULL')
-      .orderBy('usage.creationDate', 'DESC');
+      .orderBy('usage.usageDate', 'DESC')
+      .addOrderBy('usage.id', 'DESC');
 
     if (organizationIds) {
       queryBuilder.andWhere('vehicle.organizationId IN (:...organizationIds)', {
@@ -78,11 +102,35 @@ export class UsagesService {
     if (creatorId) {
       queryBuilder.andWhere('usage.creatorId = :creatorId', { creatorId });
     }
+    if (startDate && endDate) {
+      queryBuilder.andWhere(
+        'usage.usageDate >= :startDate AND usage.usageDate <= :endDate',
+        { startDate, endDate },
+      );
+    }
 
-    const usages = await queryBuilder.getMany();
+    if (cursor) {
+      queryBuilder.andWhere(
+        '(usage.usageDate, usage.id) < (:cursorDate, CAST(:cursorId AS uuid))',
+        { cursorDate: cursor.usageDate, cursorId: cursor.id },
+      );
+    }
+    if (limit) {
+      // Eine Zeile mehr holen, um zu wissen, ob es eine weitere Seite gibt.
+      queryBuilder.limit(limit + 1);
+    }
+
+    const fetched = await queryBuilder.getMany();
+    const hasMore = limit !== undefined && fetched.length > limit;
+    const usages = hasMore ? fetched.slice(0, limit) : fetched;
+    const last = usages[usages.length - 1];
+    const nextCursor =
+      hasMore && last
+        ? encodeUsageCursor({ usageDate: last.usageDate, id: last.id })
+        : null;
 
     // Transform to match expected response format
-    return usages.map((usage) => ({
+    const items = usages.map((usage) => ({
       id: usage.id,
       vehicleId: usage.vehicleId,
       creatorId: usage.creatorId,
@@ -108,6 +156,8 @@ export class UsagesService {
         email: usage.creator.email,
       },
     }));
+
+    return { usages: items, nextCursor };
   }
 
   /**
