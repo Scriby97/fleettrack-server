@@ -9,6 +9,7 @@ import type { CreateUsageDto } from './dto/create-usage.dto';
 import type { UpdateUsageDto } from './dto/update-usage.dto';
 import { encodeUsageCursor, MAX_USAGES_PAGE_SIZE } from './usage-cursor.util';
 import {
+  AppConflictException,
   AppForbiddenException,
   AppNotFoundException,
 } from '../common/exceptions';
@@ -25,6 +26,7 @@ describe('UsagesController', () => {
     update: jest.fn(),
     delete: jest.fn(),
     findOne: jest.fn(),
+    checkHoursContinuity: jest.fn(),
   };
   const vehiclesService = {
     findOne: jest.fn(),
@@ -40,6 +42,9 @@ describe('UsagesController', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    // Standardmaessig keine Luecke/Ueberschneidung - Tests, die das explizit
+    // pruefen wollen, ueberschreiben das gezielt mit ihrem eigenen mockResolvedValue.
+    usagesService.checkHoursContinuity.mockResolvedValue([]);
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [UsagesController],
@@ -289,6 +294,53 @@ describe('UsagesController', () => {
     });
   });
 
+  describe('create (hours continuity)', () => {
+    const baseDto: CreateUsageDto = {
+      vehicleId: 'v1',
+      startOperatingHours: 10,
+      endOperatingHours: 15,
+      fuelLitersRefilled: 0,
+      usageDate: new Date('2026-01-01T12:00:00.000Z'),
+    };
+
+    beforeEach(() => {
+      membersService.getOrganizationIds.mockResolvedValue(['org-a']);
+      vehiclesService.findOne.mockResolvedValue({
+        id: 'v1',
+        organizationId: 'org-a',
+      });
+      usagesService.create.mockResolvedValue({ id: 'usage-1' });
+    });
+
+    it('blocks the save and throws AppConflictException when a gap/overlap is found', async () => {
+      usagesService.checkHoursContinuity.mockResolvedValue([
+        { type: 'gap', hours: 4.5 },
+      ]);
+
+      await expect(controller.create(baseDto, employee)).rejects.toThrow(
+        AppConflictException,
+      );
+      expect(usagesService.create).not.toHaveBeenCalled();
+    });
+
+    it('saves anyway when confirmDespiteWarning is set, without re-checking', async () => {
+      const dto: CreateUsageDto = { ...baseDto, confirmDespiteWarning: true };
+
+      await controller.create(dto, employee);
+
+      expect(usagesService.checkHoursContinuity).not.toHaveBeenCalled();
+      expect(usagesService.create).toHaveBeenCalled();
+    });
+
+    it('saves normally when no gap/overlap is found', async () => {
+      usagesService.checkHoursContinuity.mockResolvedValue([]);
+
+      await controller.create(baseDto, employee);
+
+      expect(usagesService.create).toHaveBeenCalled();
+    });
+  });
+
   describe('update (assertCanEditUsage)', () => {
     it('allows an employee to edit their own usage without a membership check', async () => {
       usagesService.findOne.mockResolvedValue({
@@ -339,6 +391,41 @@ describe('UsagesController', () => {
       await expect(
         controller.update('missing', emptyUpdate, employee),
       ).rejects.toThrow(AppNotFoundException);
+    });
+  });
+
+  describe('update (hours continuity)', () => {
+    beforeEach(() => {
+      usagesService.findOne.mockResolvedValue({
+        id: 'usage-1',
+        creatorId: employee.id,
+        vehicleId: 'v1',
+        usageDate: new Date('2026-01-01T12:00:00.000Z'),
+        startOperatingHours: 10,
+        endOperatingHours: 15,
+        vehicle: { organizationId: 'org-a' },
+      });
+      usagesService.update.mockResolvedValue({ id: 'usage-1' });
+    });
+
+    it('blocks the save and throws AppConflictException when a gap/overlap is found', async () => {
+      usagesService.checkHoursContinuity.mockResolvedValue([
+        { type: 'overlap', hours: 2 },
+      ]);
+
+      await expect(
+        controller.update('usage-1', emptyUpdate, employee),
+      ).rejects.toThrow(AppConflictException);
+      expect(usagesService.update).not.toHaveBeenCalled();
+    });
+
+    it('saves anyway when confirmDespiteWarning is set, without re-checking', async () => {
+      const dto: UpdateUsageDto = { confirmDespiteWarning: true };
+
+      await controller.update('usage-1', dto, employee);
+
+      expect(usagesService.checkHoursContinuity).not.toHaveBeenCalled();
+      expect(usagesService.update).toHaveBeenCalled();
     });
   });
 

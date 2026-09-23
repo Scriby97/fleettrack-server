@@ -1,4 +1,11 @@
-import { IsString, IsOptional, IsNumber, IsBoolean, Min, IsDate } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsNumber,
+  IsBoolean,
+  Min,
+  IsDate,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreateUsageDto {

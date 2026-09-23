@@ -238,7 +238,8 @@ export class UsagesController {
     }
 
     // confirmDespiteWarning ist kein Entity-Feld - explizit ausschliessen statt mitzuspeichern.
-    const { confirmDespiteWarning: _confirmDespiteWarning, ...partial } = dto;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { confirmDespiteWarning, ...partial } = dto;
     return this.usagesService.update(id, partial as Partial<UsageEntity>);
   }
 
@@ -275,7 +276,9 @@ export class UsagesController {
     if (!primary) return;
 
     const codeFor = (issue: { type: 'gap' | 'overlap' }) =>
-      issue.type === 'gap' ? ErrorCode.USAGE_HOURS_GAP : ErrorCode.USAGE_HOURS_OVERLAP;
+      issue.type === 'gap'
+        ? ErrorCode.USAGE_HOURS_GAP
+        : ErrorCode.USAGE_HOURS_OVERLAP;
     const messageFor = (issue: { type: 'gap' | 'overlap'; hours: number }) =>
       issue.type === 'gap'
         ? `Lücke von ${issue.hours}h zum benachbarten Eintrag dieses Fahrzeugs`
