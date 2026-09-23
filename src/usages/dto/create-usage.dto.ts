@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsNumber, Min, IsDate } from 'class-validator';
+import { IsString, IsOptional, IsNumber, IsBoolean, Min, IsDate } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreateUsageDto {
@@ -30,4 +30,11 @@ export class CreateUsageDto {
   @IsNumber()
   @IsOptional()
   creationDate?: number;
+
+  // Vom Frontend gesetzt, nachdem der User eine Lücken-/Überschneidungs-
+  // Warnung (siehe checkHoursContinuity) bewusst bestätigt hat - überspringt
+  // die erneute Prüfung bei diesem Speicherversuch.
+  @IsBoolean()
+  @IsOptional()
+  confirmDespiteWarning?: boolean;
 }

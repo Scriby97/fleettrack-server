@@ -18,6 +18,7 @@ import type { AuthUser } from '../auth/decorators/current-user.decorator';
 import { UserRole, OrganizationRole } from '../auth/enums/user-role.enum';
 import { OrganizationMembersService } from '../organizations/organization-members.service';
 import {
+  AppConflictException,
   AppForbiddenException,
   AppNotFoundException,
   ErrorCode,
@@ -180,6 +181,19 @@ export class UsagesController {
       await this.assertVehicleInUsersOrganization(dto.vehicleId, user);
     }
 
+    if (
+      !dto.confirmDespiteWarning &&
+      dto.usageDate &&
+      dto.endOperatingHours !== undefined
+    ) {
+      await this.assertHoursContinuityOrThrow(
+        dto.vehicleId,
+        dto.usageDate,
+        dto.startOperatingHours,
+        dto.endOperatingHours,
+      );
+    }
+
     // transform DTO to a Partial<UsageEntity> and pass to service
     const partial: Partial<UsageEntity> = {
       vehicleId: dto.vehicleId,
@@ -210,10 +224,69 @@ export class UsagesController {
       await this.assertCanEditUsage(id, user);
     }
 
-    const partial: Partial<UsageEntity> = {
-      ...dto,
-    };
-    return this.usagesService.update(id, partial);
+    if (!dto.confirmDespiteWarning) {
+      const current = await this.usagesService.findOne(id);
+      if (current) {
+        await this.assertHoursContinuityOrThrow(
+          dto.vehicleId ?? current.vehicleId,
+          dto.usageDate ?? current.usageDate,
+          dto.startOperatingHours ?? current.startOperatingHours,
+          dto.endOperatingHours ?? current.endOperatingHours,
+          id,
+        );
+      }
+    }
+
+    // confirmDespiteWarning ist kein Entity-Feld - explizit ausschliessen statt mitzuspeichern.
+    const { confirmDespiteWarning: _confirmDespiteWarning, ...partial } = dto;
+    return this.usagesService.update(id, partial as Partial<UsageEntity>);
+  }
+
+  /**
+   * Wirft AppConflictException (USAGE_HOURS_GAP/USAGE_HOURS_OVERLAP), falls
+   * die Nutzung nicht lückenlos an den chronologisch benachbarten Eintrag
+   * desselben Fahrzeugs anschliesst (siehe UsagesService.checkHoursContinuity).
+   * Blockiert das Speichern nur vorläufig - das Frontend zeigt die Meldung als
+   * Bestätigungsdialog und wiederholt den Request mit confirmDespiteWarning=true.
+   *
+   * Gibt es Probleme auf BEIDEN Seiten (vorheriger UND nächster Nachbar - z.B.
+   * ein Eintrag wird mitten zwischen zwei bestehende verschoben, ohne an einen
+   * davon anzuschliessen), werden beide über params transportiert: das primäre
+   * Problem wie gehabt über code/message/params.hours, das zweite zusätzlich
+   * über params.secondaryCode/secondaryHours - das Frontend hängt dafür eine
+   * zweite, mit demselben Code-Namespace übersetzte Zeile an (siehe
+   * createUsage.tsx/usages.tsx), ohne dass neue Übersetzungs-Keys nötig sind.
+   */
+  private async assertHoursContinuityOrThrow(
+    vehicleId: string,
+    usageDate: Date,
+    startOperatingHours: number,
+    endOperatingHours: number,
+    excludeId?: string,
+  ): Promise<void> {
+    const issues = await this.usagesService.checkHoursContinuity(
+      vehicleId,
+      usageDate,
+      startOperatingHours,
+      endOperatingHours,
+      excludeId,
+    );
+    const [primary, secondary] = issues;
+    if (!primary) return;
+
+    const codeFor = (issue: { type: 'gap' | 'overlap' }) =>
+      issue.type === 'gap' ? ErrorCode.USAGE_HOURS_GAP : ErrorCode.USAGE_HOURS_OVERLAP;
+    const messageFor = (issue: { type: 'gap' | 'overlap'; hours: number }) =>
+      issue.type === 'gap'
+        ? `Lücke von ${issue.hours}h zum benachbarten Eintrag dieses Fahrzeugs`
+        : `Überschneidung von ${issue.hours}h mit einem benachbarten Eintrag dieses Fahrzeugs`;
+
+    throw new AppConflictException(codeFor(primary), messageFor(primary), {
+      hours: primary.hours,
+      ...(secondary
+        ? { secondaryCode: codeFor(secondary), secondaryHours: secondary.hours }
+        : {}),
+    });
   }
 
   /**

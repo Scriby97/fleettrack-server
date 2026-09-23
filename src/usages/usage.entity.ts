@@ -29,10 +29,31 @@ export class UsageEntity {
   @JoinColumn({ name: 'creatorId' })
   creator: UserProfileEntity;
 
-  @Column({ type: 'decimal', precision: 10, scale: 1 })
+  // transformer noetig, weil TypeORM 'decimal' sonst als String zurueckgibt
+  // (Praezisionsschutz fuer beliebig grosse Dezimalzahlen) - ohne das crashte
+  // z.B. das Frontend beim naechsten .toFixed()-Aufruf auf einer als String
+  // zurueckgegebenen Nutzung (siehe PUT /usages/:id, das die raw Entity
+  // zurueckgibt statt einer gemappten DTO).
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 1,
+    transformer: {
+      to: (value: number) => value,
+      from: (value: string) => Number(value),
+    },
+  })
   startOperatingHours: number;
 
-  @Column({ type: 'decimal', precision: 10, scale: 1 })
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 1,
+    transformer: {
+      to: (value: number) => value,
+      from: (value: string) => Number(value),
+    },
+  })
   endOperatingHours: number;
 
   @Column({ type: 'integer', default: 0 })

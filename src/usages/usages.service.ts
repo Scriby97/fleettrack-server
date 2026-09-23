@@ -199,4 +199,91 @@ export class UsagesService {
   async delete(id: string): Promise<void> {
     await this.repo.delete(id);
   }
+
+  /**
+   * Prüft, ob eine (neue oder bearbeitete) Nutzung lückenlos an den
+   * chronologisch benachbarten Eintrag desselben Fahrzeugs anschliesst.
+   * Ein Betriebsstundenzähler läuft nur während der Fahrt - zwischen zwei
+   * Nutzungen bewegt er sich nicht. Korrekt verkettet gilt also: Endstand
+   * einer Nutzung = Startstand der chronologisch nächsten. "Chronologisch"
+   * meint hier usageDate (wann tatsächlich gefahren wurde), nicht wann der
+   * Eintrag erfasst wurde - sonst würde nachträgliches Erfassen (siehe
+   * Fleet-Overview-Zeitraumfilter) die Kette künstlich aufreissen. Da
+   * usageDate nur ein Datum ist (kein Zeitstempel), dient startOperatingHours
+   * als Tie-Breaker für mehrere Eintraege am selben Tag.
+   *
+   * Nutzt den bestehenden Index idx_usages_vehicle_usage_date
+   * (vehicleId, usageDate) - beide Lookups sind einfache, indexierte
+   * "nächster Nachbar"-Abfragen mit LIMIT 1, keine Tabellen-Scans. Bei den
+   * hier üblichen Datenmengen (wenige Nutzungen pro Fahrzeug und Tag) liegt
+   * die zusätzliche Latenz im Bereich von Bruchteilen einer Millisekunde -
+   * unbedenklich, synchron vor jedem Speichern auszuführen.
+   *
+   * @param excludeId - beim Bearbeiten die eigene ID, damit sich der Eintrag
+   *   nicht selbst als Nachbarn findet
+   * @returns leeres Array, wenn lückenlos/keine Nachbarn vorhanden, sonst bis
+   *   zu zwei Probleme (Index 0 = vorheriger Nachbar, Index 1 = nächster
+   *   Nachbar - z.B. wenn ein Eintrag mitten zwischen zwei bestehende
+   *   verschoben wird, ohne an einen der beiden anzuschliessen, entstehen
+   *   gleichzeitig zwei unabhängige Probleme)
+   */
+  async checkHoursContinuity(
+    vehicleId: string,
+    usageDate: Date,
+    startOperatingHours: number,
+    endOperatingHours: number,
+    excludeId?: string,
+  ): Promise<Array<{ type: 'gap' | 'overlap'; hours: number }>> {
+    const buildNeighborQuery = (direction: 'previous' | 'next') => {
+      const qb = this.repo
+        .createQueryBuilder('u')
+        .where('u.vehicleId = :vehicleId', { vehicleId });
+
+      if (excludeId) {
+        qb.andWhere('u.id != :excludeId', { excludeId });
+      }
+
+      if (direction === 'previous') {
+        qb.andWhere(
+          '(u.usageDate < :usageDate OR (u.usageDate = :usageDate AND u.startOperatingHours < :startOperatingHours))',
+          { usageDate, startOperatingHours },
+        )
+          .orderBy('u.usageDate', 'DESC')
+          .addOrderBy('u.startOperatingHours', 'DESC');
+      } else {
+        qb.andWhere(
+          '(u.usageDate > :usageDate OR (u.usageDate = :usageDate AND u.startOperatingHours > :startOperatingHours))',
+          { usageDate, startOperatingHours },
+        )
+          .orderBy('u.usageDate', 'ASC')
+          .addOrderBy('u.startOperatingHours', 'ASC');
+      }
+
+      return qb.limit(1).getOne();
+    };
+
+    const [previous, next] = await Promise.all([
+      buildNeighborQuery('previous'),
+      buildNeighborQuery('next'),
+    ]);
+
+    // Rundungsdifferenzen durch decimal(10,1) ignorieren (< 0.05h sind kein
+    // echtes Problem).
+    const round1 = (n: number) => Math.round(n * 10) / 10;
+    const issues: Array<{ type: 'gap' | 'overlap'; hours: number }> = [];
+
+    if (previous) {
+      const diff = round1(startOperatingHours - previous.endOperatingHours);
+      if (diff > 0.05) issues.push({ type: 'gap', hours: diff });
+      else if (diff < -0.05) issues.push({ type: 'overlap', hours: -diff });
+    }
+
+    if (next) {
+      const diff = round1(next.startOperatingHours - endOperatingHours);
+      if (diff > 0.05) issues.push({ type: 'gap', hours: diff });
+      else if (diff < -0.05) issues.push({ type: 'overlap', hours: -diff });
+    }
+
+    return issues;
+  }
 }

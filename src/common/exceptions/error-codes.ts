@@ -48,6 +48,12 @@ export const ErrorCode = {
   USAGE_NOT_FOUND: 'USAGE_NOT_FOUND',
   USAGE_DELETE_FORBIDDEN: 'USAGE_DELETE_FORBIDDEN',
   USAGE_EDIT_FORBIDDEN: 'USAGE_EDIT_FORBIDDEN',
+  // Betriebsstunden-Kontinuität zum chronologisch benachbarten Eintrag
+  // desselben Fahrzeugs (siehe UsagesService.checkHoursContinuity) - blockiert
+  // das Speichern nicht endgültig, das Frontend zeigt stattdessen eine
+  // Bestätigung an und wiederholt den Request mit confirmDespiteWarning=true.
+  USAGE_HOURS_GAP: 'USAGE_HOURS_GAP',
+  USAGE_HOURS_OVERLAP: 'USAGE_HOURS_OVERLAP',
   ORG_NO_MEMBERSHIP: 'ORG_NO_MEMBERSHIP',
 
   // --- Organisationen (Zugriff/Verwaltung) ---

@@ -2,6 +2,7 @@ import {
   IsString,
   IsOptional,
   IsNumber,
+  IsBoolean,
   Min,
   IsDate,
   IsPositive,
@@ -40,4 +41,11 @@ export class UpdateUsageDto {
   @IsNumber()
   @IsOptional()
   creationDate?: number;
+
+  // Vom Frontend gesetzt, nachdem der User eine Lücken-/Überschneidungs-
+  // Warnung (siehe checkHoursContinuity) bewusst bestätigt hat - überspringt
+  // die erneute Prüfung bei diesem Speicherversuch.
+  @IsBoolean()
+  @IsOptional()
+  confirmDespiteWarning?: boolean;
 }
