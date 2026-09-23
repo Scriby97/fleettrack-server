@@ -112,6 +112,8 @@ export class UsagesController {
    * Antwort enthaelt { usages, nextCursor } - nextCursor (null = letzte Seite)
    * wird beim naechsten Aufruf als ?cursor= mitgegeben. Ohne limit werden alle
    * Treffer geliefert (Kalenderansicht, dort ist der Zeitraum ein Monat/eine Woche).
+   * Optional ?vehicleId=... schraenkt auf ein einzelnes Fahrzeug ein (Nutzungen-Tab
+   * der Fahrzeug-Detailseite).
    */
   @Get('with-vehicles')
   async getAllWithVehicles(
@@ -121,6 +123,7 @@ export class UsagesController {
     @Query('endDate') endDateParam?: string,
     @Query('limit') limitParam?: string,
     @Query('cursor') cursorParam?: string,
+    @Query('vehicleId') vehicleId?: string,
   ) {
     const organizationIds = await this.resolveOrganizationIds(user, queryOrgId);
     const creatorId = await this.resolveCreatorIdFilter(user, organizationIds);
@@ -137,6 +140,7 @@ export class UsagesController {
       endDate,
       limit,
       cursor,
+      vehicleId,
     );
   }
 

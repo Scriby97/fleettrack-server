@@ -56,7 +56,16 @@ export class UsageEntity {
   })
   endOperatingHours: number;
 
-  @Column({ type: 'integer', default: 0 })
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    default: 0,
+    transformer: {
+      to: (value: number) => value,
+      from: (value: string) => Number(value),
+    },
+  })
   fuelLitersRefilled: number;
 
   @Column({

@@ -155,6 +155,36 @@ describe('UsagesController', () => {
         new Date('2025-01-31T00:00:00.000Z'),
         undefined,
         undefined,
+        undefined,
+      );
+    });
+  });
+
+  describe('getAllWithVehicles (vehicleId filter)', () => {
+    it('forwards vehicleId to the service', async () => {
+      usagesService.findAllWithVehicles.mockResolvedValue({
+        usages: [],
+        nextCursor: null,
+      });
+
+      await controller.getAllWithVehicles(
+        adminUser,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'vehicle-1',
+      );
+
+      expect(usagesService.findAllWithVehicles).toHaveBeenCalledWith(
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'vehicle-1',
       );
     });
   });
@@ -195,6 +225,7 @@ describe('UsagesController', () => {
         undefined,
         10,
         { usageDate: new Date('2025-01-02T00:00:00.000Z'), id: 'u2' },
+        undefined,
       );
     });
 
@@ -218,6 +249,7 @@ describe('UsagesController', () => {
         undefined,
         undefined,
         MAX_USAGES_PAGE_SIZE,
+        undefined,
         undefined,
       );
     });

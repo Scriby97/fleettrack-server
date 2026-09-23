@@ -27,7 +27,7 @@ export class UpdateUsageDto {
   endOperatingHours?: number;
 
   @Type(() => Number)
-  @IsNumber()
+  @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
   @IsOptional()
   fuelLitersRefilled?: number;

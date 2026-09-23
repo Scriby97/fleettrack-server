@@ -185,6 +185,25 @@ describe('UsagesService', () => {
       );
     });
 
+    it('restricts to a single vehicle when vehicleId is given', async () => {
+      const qb = createQueryBuilderMock([]);
+      repo.createQueryBuilder.mockReturnValue(qb);
+
+      await service.findAllWithVehicles(
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'v1',
+      );
+
+      expect(qb.andWhere).toHaveBeenCalledWith('usage.vehicleId = :vehicleId', {
+        vehicleId: 'v1',
+      });
+    });
+
     describe('pagination', () => {
       const makeUsage = (id: string, usageDate: string) => ({
         id,

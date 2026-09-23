@@ -73,6 +73,7 @@ export class UsagesService {
    *   (z.B. fuer die Kalenderansicht, die ohnehin auf einen Zeitraum begrenzt ist).
    * @param cursor - optional: Position der letzten bereits geladenen Nutzung (usageDate, id) -
    *   liefert die naechsten Eintraege danach. Stabil auch, wenn zwischenzeitlich neue Nutzungen erfasst werden.
+   * @param vehicleId - optional: nur Nutzungen dieses einen Fahrzeugs (Nutzungen-Tab der Fahrzeug-Detailseite).
    */
   async findAllWithVehicles(
     organizationIds?: string[],
@@ -81,6 +82,7 @@ export class UsagesService {
     endDate?: Date,
     limit?: number,
     cursor?: UsageCursor,
+    vehicleId?: string,
   ): Promise<{ usages: any[]; nextCursor: string | null }> {
     if (organizationIds && organizationIds.length === 0) {
       return { usages: [], nextCursor: null };
@@ -101,6 +103,9 @@ export class UsagesService {
     }
     if (creatorId) {
       queryBuilder.andWhere('usage.creatorId = :creatorId', { creatorId });
+    }
+    if (vehicleId) {
+      queryBuilder.andWhere('usage.vehicleId = :vehicleId', { vehicleId });
     }
     if (startDate && endDate) {
       queryBuilder.andWhere(
