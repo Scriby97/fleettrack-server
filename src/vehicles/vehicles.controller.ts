@@ -104,6 +104,27 @@ export class VehiclesController {
   }
 
   /**
+   * GET /vehicles/inconsistent-usages
+   * Fahrzeug-IDs mit Lücken/Überschneidungen zwischen chronologisch
+   * aufeinanderfolgenden Nutzungen (siehe VehiclesService.
+   * findVehicleIdsWithInconsistentUsages) - für die "!"-Badges in
+   * Navigation/Flottenübersicht/Fahrzeug-Detailseite. Administratoren können
+   * optional ?organizationId=... übergeben.
+   */
+  @Get('inconsistent-usages')
+  async getInconsistentUsages(
+    @CurrentUser() user: AuthUser,
+    @Query('organizationId') queryOrgId?: string,
+  ) {
+    const organizationIds = await this.resolveOrganizationIds(user, queryOrgId);
+    const vehicleIds =
+      await this.vehiclesService.findVehicleIdsWithInconsistentUsages(
+        organizationIds,
+      );
+    return { vehicleIds };
+  }
+
+  /**
    * GET /vehicles/:vehicleId/last-operating-hours
    * Letzte endOperatingHours eines Fahrzeugs abrufen (benötigt Auth)
    * Normale User dürfen dies nur für Fahrzeuge ihrer eigenen Organisation(en)

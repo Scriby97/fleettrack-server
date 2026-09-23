@@ -336,6 +336,61 @@ export class VehiclesService {
   }
 
   /**
+   * Fahrzeug-IDs, bei denen mindestens zwei chronologisch aufeinanderfolgende
+   * Nutzungen eine Lücke oder Überschneidung der Betriebsstunden haben (gleiche
+   * 0.05h-Rundungstoleranz wie UsagesService.checkHoursContinuity) - für das
+   * "!"-Warnsymbol in Navigation/Flottenübersicht/Fahrzeug-Detailseite.
+   *
+   * Nutzt ein Fenster (LAG) statt einer Einzelabfrage pro Fahrzeug, damit die
+   * gesamte Flotte in einer Query geprüft werden kann, statt N+1 Abfragen
+   * (eine je Fahrzeug) auszuführen.
+   */
+  async findVehicleIdsWithInconsistentUsages(
+    organizationIds?: string[],
+  ): Promise<string[]> {
+    if (organizationIds && organizationIds.length === 0) {
+      return [];
+    }
+
+    const qb = this.usageRepo
+      .createQueryBuilder('u')
+      .innerJoin('u.vehicle', 'vehicle')
+      .select('u.vehicleId', 'vehicleId')
+      .addSelect('u.startOperatingHours', 'startOperatingHours')
+      .addSelect(
+        'LAG(u.endOperatingHours) OVER (PARTITION BY u.vehicleId ORDER BY u.usageDate, u.startOperatingHours)',
+        'prevEndOperatingHours',
+      )
+      .where('vehicle.archivedAt IS NULL');
+
+    if (organizationIds) {
+      qb.andWhere('vehicle.organizationId IN (:...organizationIds)', {
+        organizationIds,
+      });
+    }
+
+    const rows = await qb.getRawMany<{
+      vehicleId: string;
+      startOperatingHours: string;
+      prevEndOperatingHours: string | null;
+    }>();
+
+    const round1 = (n: number) => Math.round(n * 10) / 10;
+    const vehicleIds = new Set<string>();
+    for (const row of rows) {
+      if (row.prevEndOperatingHours === null) continue;
+      const diff = round1(
+        Number(row.startOperatingHours) - Number(row.prevEndOperatingHours),
+      );
+      if (diff > 0.05 || diff < -0.05) {
+        vehicleIds.add(row.vehicleId);
+      }
+    }
+
+    return Array.from(vehicleIds);
+  }
+
+  /**
    * Get the endOperatingHours from the last usage of a vehicle
    */
   async getLastOperatingHours(vehicleId: string): Promise<number | null> {

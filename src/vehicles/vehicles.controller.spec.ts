@@ -19,6 +19,7 @@ describe('VehiclesController', () => {
     findOne: jest.fn(),
     usageHistory: jest.fn(),
     getLastOperatingHours: jest.fn(),
+    findVehicleIdsWithInconsistentUsages: jest.fn(),
   };
   const membersService = {
     getOrganizationIds: jest.fn(),
@@ -71,6 +72,34 @@ describe('VehiclesController', () => {
       await expect(
         controller.getAll(normalUser, 'org-not-mine'),
       ).rejects.toThrow(AppForbiddenException);
+    });
+  });
+
+  describe('getInconsistentUsages', () => {
+    it('does not filter by organization for a global administrator without a query param', async () => {
+      vehiclesService.findVehicleIdsWithInconsistentUsages.mockResolvedValue([
+        'v1',
+      ]);
+
+      const result = await controller.getInconsistentUsages(adminUser);
+
+      expect(
+        vehiclesService.findVehicleIdsWithInconsistentUsages,
+      ).toHaveBeenCalledWith(undefined);
+      expect(result).toEqual({ vehicleIds: ['v1'] });
+    });
+
+    it('scopes a normal user to their own organizations', async () => {
+      membersService.getOrganizationIds.mockResolvedValue(['org-a']);
+      vehiclesService.findVehicleIdsWithInconsistentUsages.mockResolvedValue(
+        [],
+      );
+
+      await controller.getInconsistentUsages(normalUser);
+
+      expect(
+        vehiclesService.findVehicleIdsWithInconsistentUsages,
+      ).toHaveBeenCalledWith(['org-a']);
     });
   });
 

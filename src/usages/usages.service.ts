@@ -5,6 +5,31 @@ import { UsageEntity } from './usage.entity';
 import { AppNotFoundException, ErrorCode } from '../common/exceptions';
 import { encodeUsageCursor, type UsageCursor } from './usage-cursor.util';
 
+export interface UsageWithVehicleDetail {
+  id: string;
+  vehicleId: string;
+  creatorId: string;
+  startOperatingHours: number;
+  endOperatingHours: number;
+  fuelLitersRefilled: number;
+  creationDate: number;
+  usageDate: Date;
+  vehicle: { id: string; name: string; plate: string; vehicleType?: string };
+  creator: {
+    id: string;
+    firstName?: string;
+    lastName?: string;
+    email: string;
+  };
+}
+
+export interface InconsistentUsagePair {
+  type: 'gap' | 'overlap';
+  hours: number;
+  previous: UsageWithVehicleDetail;
+  current: UsageWithVehicleDetail;
+}
+
 @Injectable()
 export class UsagesService {
   constructor(
@@ -135,7 +160,18 @@ export class UsagesService {
         : null;
 
     // Transform to match expected response format
-    const items = usages.map((usage) => ({
+    const items = usages.map((usage) => this.mapUsageWithVehicle(usage));
+
+    return { usages: items, nextCursor };
+  }
+
+  /**
+   * Flacht eine Usage (mit geladenen vehicle-/creator-Relationen) auf das
+   * vom Frontend erwartete Response-Format ab - gemeinsam genutzt von
+   * findAllWithVehicles und findInconsistentPairs.
+   */
+  private mapUsageWithVehicle(usage: UsageEntity): UsageWithVehicleDetail {
+    return {
       id: usage.id,
       vehicleId: usage.vehicleId,
       creatorId: usage.creatorId,
@@ -160,9 +196,7 @@ export class UsagesService {
         // vorhanden, das gar nicht gespeichert wurde).
         email: usage.creator.email,
       },
-    }));
-
-    return { usages: items, nextCursor };
+    };
   }
 
   /**
@@ -290,5 +324,71 @@ export class UsagesService {
     }
 
     return issues;
+  }
+
+  /**
+   * Findet alle Paare chronologisch aufeinanderfolgender Nutzungen eines
+   * Fahrzeugs, die nicht lückenlos ineinander übergehen (Lücke oder
+   * Überschneidung) - für den "Nur inkonsistente Nutzungen"-Filter im
+   * Nutzungen-Tab der Fahrzeug-Detailseite. Gleiche Diff-Logik/Toleranz wie
+   * checkHoursContinuity, aber über die komplette Historie des Fahrzeugs statt
+   * nur die direkten Nachbarn eines einzelnen (neuen/bearbeiteten) Eintrags.
+   *
+   * @param organizationIds - falls gesetzt, wird das Ergebnis leer, wenn das
+   *   Fahrzeug keiner dieser Organisationen gehört (gleiches Muster wie
+   *   findAllWithVehicles) - schützt vor organisationsübergreifendem Zugriff.
+   */
+  async findInconsistentPairs(
+    vehicleId: string,
+    organizationIds?: string[],
+  ): Promise<InconsistentUsagePair[]> {
+    if (organizationIds && organizationIds.length === 0) {
+      return [];
+    }
+
+    const qb = this.repo
+      .createQueryBuilder('usage')
+      .innerJoinAndSelect('usage.vehicle', 'vehicle')
+      .innerJoinAndSelect('usage.creator', 'creator')
+      .where('usage.vehicleId = :vehicleId', { vehicleId })
+      .orderBy('usage.usageDate', 'ASC')
+      .addOrderBy('usage.startOperatingHours', 'ASC');
+
+    if (organizationIds) {
+      qb.andWhere('vehicle.organizationId IN (:...organizationIds)', {
+        organizationIds,
+      });
+    }
+
+    const usages = await qb.getMany();
+
+    const round1 = (n: number) => Math.round(n * 10) / 10;
+    const pairs: InconsistentUsagePair[] = [];
+
+    for (let i = 1; i < usages.length; i++) {
+      const previous = usages[i - 1];
+      const current = usages[i];
+      const diff = round1(
+        current.startOperatingHours - previous.endOperatingHours,
+      );
+
+      if (diff > 0.05) {
+        pairs.push({
+          type: 'gap',
+          hours: diff,
+          previous: this.mapUsageWithVehicle(previous),
+          current: this.mapUsageWithVehicle(current),
+        });
+      } else if (diff < -0.05) {
+        pairs.push({
+          type: 'overlap',
+          hours: -diff,
+          previous: this.mapUsageWithVehicle(previous),
+          current: this.mapUsageWithVehicle(current),
+        });
+      }
+    }
+
+    return pairs;
   }
 }

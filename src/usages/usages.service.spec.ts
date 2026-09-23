@@ -363,4 +363,85 @@ describe('UsagesService', () => {
       expect(repo.delete).toHaveBeenCalledWith('u1');
     });
   });
+
+  describe('findInconsistentPairs', () => {
+    const makeUsage = (
+      id: string,
+      start: number,
+      end: number,
+      usageDate: string,
+    ) => ({
+      id,
+      vehicleId: 'v1',
+      creatorId: 'c1',
+      startOperatingHours: start,
+      endOperatingHours: end,
+      fuelLitersRefilled: 0,
+      creationDate: 1,
+      usageDate: new Date(usageDate),
+      vehicle: { id: 'v1', name: 'V', plate: 'P', vehicleType: 'T' },
+      creator: { id: 'c1', firstName: 'A', lastName: 'B', email: 'a@b.c' },
+    });
+
+    it('returns an empty array without querying when given an empty organizationIds array', async () => {
+      const result = await service.findInconsistentPairs('v1', []);
+
+      expect(result).toEqual([]);
+      expect(repo.createQueryBuilder).not.toHaveBeenCalled();
+    });
+
+    it('returns no pairs when consecutive usages connect seamlessly', async () => {
+      const qb = createQueryBuilderMock([
+        makeUsage('u1', 0, 10, '2025-01-01'),
+        makeUsage('u2', 10, 20, '2025-01-02'),
+      ]);
+      repo.createQueryBuilder.mockReturnValue(qb);
+
+      const result = await service.findInconsistentPairs('v1');
+
+      expect(result).toEqual([]);
+    });
+
+    it('reports a gap pair when the next start is higher than the previous end', async () => {
+      const qb = createQueryBuilderMock([
+        makeUsage('u1', 0, 10, '2025-01-01'),
+        makeUsage('u2', 12, 20, '2025-01-02'),
+      ]);
+      repo.createQueryBuilder.mockReturnValue(qb);
+
+      const result = await service.findInconsistentPairs('v1');
+
+      expect(result).toHaveLength(1);
+      expect(result[0].type).toBe('gap');
+      expect(result[0].hours).toBe(2);
+      expect(result[0].previous.id).toBe('u1');
+      expect(result[0].current.id).toBe('u2');
+    });
+
+    it('reports an overlap pair when the next start is lower than the previous end', async () => {
+      const qb = createQueryBuilderMock([
+        makeUsage('u1', 0, 10, '2025-01-01'),
+        makeUsage('u2', 8, 20, '2025-01-02'),
+      ]);
+      repo.createQueryBuilder.mockReturnValue(qb);
+
+      const result = await service.findInconsistentPairs('v1');
+
+      expect(result).toHaveLength(1);
+      expect(result[0].type).toBe('overlap');
+      expect(result[0].hours).toBe(2);
+    });
+
+    it('filters by organizationIds via the vehicle join when given', async () => {
+      const qb = createQueryBuilderMock([]);
+      repo.createQueryBuilder.mockReturnValue(qb);
+
+      await service.findInconsistentPairs('v1', ['org-a']);
+
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'vehicle.organizationId IN (:...organizationIds)',
+        { organizationIds: ['org-a'] },
+      );
+    });
+  });
 });

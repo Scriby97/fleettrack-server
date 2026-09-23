@@ -18,6 +18,7 @@ import type { AuthUser } from '../auth/decorators/current-user.decorator';
 import { UserRole, OrganizationRole } from '../auth/enums/user-role.enum';
 import { OrganizationMembersService } from '../organizations/organization-members.service';
 import {
+  AppBadRequestException,
   AppConflictException,
   AppForbiddenException,
   AppNotFoundException,
@@ -142,6 +143,35 @@ export class UsagesController {
       cursor,
       vehicleId,
     );
+  }
+
+  /**
+   * GET /usages/inconsistent-pairs?vehicleId=...
+   * Paare chronologisch aufeinanderfolgender Nutzungen desselben Fahrzeugs,
+   * die nicht lückenlos ineinander übergehen (Lücke oder Überschneidung) -
+   * für den "Nur inkonsistente Nutzungen"-Filter im Nutzungen-Tab der
+   * Fahrzeug-Detailseite (siehe UsagesService.findInconsistentPairs).
+   * Optional ?organizationId=... (nur für Administratoren relevant, normale
+   * User sind ohnehin auf ihre eigene(n) Organisation(en) beschränkt).
+   */
+  @Get('inconsistent-pairs')
+  async getInconsistentPairs(
+    @CurrentUser() user: AuthUser,
+    @Query('vehicleId') vehicleId?: string,
+    @Query('organizationId') queryOrgId?: string,
+  ) {
+    if (!vehicleId) {
+      throw new AppBadRequestException(
+        ErrorCode.VALIDATION_BAD_REQUEST_GENERIC,
+        'vehicleId is required',
+      );
+    }
+    const organizationIds = await this.resolveOrganizationIds(user, queryOrgId);
+    const pairs = await this.usagesService.findInconsistentPairs(
+      vehicleId,
+      organizationIds,
+    );
+    return { pairs };
   }
 
   /**

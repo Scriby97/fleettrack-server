@@ -27,6 +27,7 @@ describe('UsagesController', () => {
     delete: jest.fn(),
     findOne: jest.fn(),
     checkHoursContinuity: jest.fn(),
+    findInconsistentPairs: jest.fn(),
   };
   const vehiclesService = {
     findOne: jest.fn(),
@@ -282,6 +283,38 @@ describe('UsagesController', () => {
         ),
       ).rejects.toThrow();
       expect(usagesService.findAllWithVehicles).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getInconsistentPairs', () => {
+    it('rejects a request without vehicleId', async () => {
+      await expect(
+        controller.getInconsistentPairs(adminUser),
+      ).rejects.toThrow();
+      expect(usagesService.findInconsistentPairs).not.toHaveBeenCalled();
+    });
+
+    it('forwards vehicleId and the resolved organizationIds to the service', async () => {
+      usagesService.findInconsistentPairs.mockResolvedValue([]);
+
+      const result = await controller.getInconsistentPairs(adminUser, 'v1');
+
+      expect(usagesService.findInconsistentPairs).toHaveBeenCalledWith(
+        'v1',
+        undefined,
+      );
+      expect(result).toEqual({ pairs: [] });
+    });
+
+    it('scopes a normal user to their own organizations', async () => {
+      membersService.getOrganizationIds.mockResolvedValue(['org-a']);
+      usagesService.findInconsistentPairs.mockResolvedValue([]);
+
+      await controller.getInconsistentPairs(employee, 'v1');
+
+      expect(usagesService.findInconsistentPairs).toHaveBeenCalledWith('v1', [
+        'org-a',
+      ]);
     });
   });
 

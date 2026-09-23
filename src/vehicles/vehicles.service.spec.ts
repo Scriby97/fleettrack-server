@@ -6,6 +6,7 @@ import { AppNotFoundException } from '../common/exceptions';
 function createQueryBuilderMock(terminalResults: Record<string, any> = {}) {
   const qb: any = {
     leftJoin: jest.fn(() => qb),
+    innerJoin: jest.fn(() => qb),
     select: jest.fn(() => qb),
     addSelect: jest.fn(() => qb),
     where: jest.fn(() => qb),
@@ -275,6 +276,105 @@ describe('VehiclesService', () => {
       usageRepo.findOne.mockResolvedValue(null);
 
       await expect(service.getLastOperatingHours('v1')).resolves.toBeNull();
+    });
+  });
+
+  describe('findVehicleIdsWithInconsistentUsages', () => {
+    it('returns an empty array without querying when given an empty organizationIds array', async () => {
+      const result = await service.findVehicleIdsWithInconsistentUsages([]);
+
+      expect(result).toEqual([]);
+      expect(usageRepo.createQueryBuilder).not.toHaveBeenCalled();
+    });
+
+    it('returns no vehicle ids when all rows connect seamlessly (or have no previous row)', async () => {
+      const qb = createQueryBuilderMock({
+        rawMany: [
+          {
+            vehicleId: 'v1',
+            startOperatingHours: '0',
+            prevEndOperatingHours: null,
+          },
+          {
+            vehicleId: 'v1',
+            startOperatingHours: '10',
+            prevEndOperatingHours: '10',
+          },
+        ],
+      });
+      usageRepo.createQueryBuilder.mockReturnValue(qb);
+
+      const result = await service.findVehicleIdsWithInconsistentUsages();
+
+      expect(result).toEqual([]);
+    });
+
+    it('reports a vehicle id once for a gap row', async () => {
+      const qb = createQueryBuilderMock({
+        rawMany: [
+          {
+            vehicleId: 'v1',
+            startOperatingHours: '12',
+            prevEndOperatingHours: '10',
+          },
+        ],
+      });
+      usageRepo.createQueryBuilder.mockReturnValue(qb);
+
+      const result = await service.findVehicleIdsWithInconsistentUsages();
+
+      expect(result).toEqual(['v1']);
+    });
+
+    it('reports a vehicle id for an overlap row', async () => {
+      const qb = createQueryBuilderMock({
+        rawMany: [
+          {
+            vehicleId: 'v1',
+            startOperatingHours: '8',
+            prevEndOperatingHours: '10',
+          },
+        ],
+      });
+      usageRepo.createQueryBuilder.mockReturnValue(qb);
+
+      const result = await service.findVehicleIdsWithInconsistentUsages();
+
+      expect(result).toEqual(['v1']);
+    });
+
+    it('deduplicates when a vehicle has more than one inconsistent row', async () => {
+      const qb = createQueryBuilderMock({
+        rawMany: [
+          {
+            vehicleId: 'v1',
+            startOperatingHours: '12',
+            prevEndOperatingHours: '10',
+          },
+          {
+            vehicleId: 'v1',
+            startOperatingHours: '30',
+            prevEndOperatingHours: '25',
+          },
+        ],
+      });
+      usageRepo.createQueryBuilder.mockReturnValue(qb);
+
+      const result = await service.findVehicleIdsWithInconsistentUsages();
+
+      expect(result).toEqual(['v1']);
+    });
+
+    it('filters by organizationIds via the vehicle join when given', async () => {
+      const qb = createQueryBuilderMock({ rawMany: [] });
+      usageRepo.createQueryBuilder.mockReturnValue(qb);
+
+      await service.findVehicleIdsWithInconsistentUsages(['org-a']);
+
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'vehicle.organizationId IN (:...organizationIds)',
+        { organizationIds: ['org-a'] },
+      );
     });
   });
 
