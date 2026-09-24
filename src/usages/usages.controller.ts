@@ -274,7 +274,12 @@ export class UsagesController {
     // confirmDespiteWarning ist kein Entity-Feld - explizit ausschliessen statt mitzuspeichern.
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { confirmDespiteWarning, ...partial } = dto;
-    return this.usagesService.update(id, partial as Partial<UsageEntity>);
+    // Bearbeiter/Zeitpunkt immer serverseitig setzen - nie aus dem Request.
+    return this.usagesService.update(id, {
+      ...(partial as Partial<UsageEntity>),
+      lastUpdaterId: user.id,
+      lastUpdateDate: Date.now(),
+    });
   }
 
   /**

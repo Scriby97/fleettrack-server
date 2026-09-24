@@ -473,6 +473,25 @@ describe('UsagesController', () => {
       usagesService.update.mockResolvedValue({ id: 'usage-1' });
     });
 
+    it('records the updating user and time server-side, ignoring values from the request', async () => {
+      const before = Date.now();
+
+      await controller.update(
+        'usage-1',
+        {
+          fuelLitersRefilled: 5,
+          lastUpdaterId: 'someone-else',
+          lastUpdateDate: 1,
+        } as UpdateUsageDto,
+        employee,
+      );
+
+      const saved = usagesService.update.mock.calls[0][1];
+      expect(saved.fuelLitersRefilled).toBe(5);
+      expect(saved.lastUpdaterId).toBe(employee.id);
+      expect(saved.lastUpdateDate).toBeGreaterThanOrEqual(before);
+    });
+
     it('blocks the save and throws AppConflictException when a gap/overlap is found', async () => {
       usagesService.checkHoursContinuity.mockResolvedValue([
         { type: 'overlap', hours: 2 },

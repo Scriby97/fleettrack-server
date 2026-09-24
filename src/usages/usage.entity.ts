@@ -78,6 +78,25 @@ export class UsageEntity {
   })
   creationDate: number;
 
+  // Wer die Nutzung zuletzt bearbeitet hat und wann (Epoch-Millisekunden) -
+  // null = nie bearbeitet. Wird ausschliesslich serverseitig gesetzt (PUT).
+  @Column({ type: 'uuid', nullable: true })
+  lastUpdaterId: string | null;
+
+  @ManyToOne(() => UserProfileEntity, { nullable: true })
+  @JoinColumn({ name: 'lastUpdaterId' })
+  lastUpdater: UserProfileEntity | null;
+
+  @Column({
+    type: 'bigint',
+    nullable: true,
+    transformer: {
+      to: (value: number | null) => value,
+      from: (value: string | null) => (value === null ? null : Number(value)),
+    },
+  })
+  lastUpdateDate: number | null;
+
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   usageDate: Date;
 }
