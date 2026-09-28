@@ -3,6 +3,7 @@ import { ValidationPipe, Logger, RequestMethod } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { getVersionInfo } from './version';
+import { validationExceptionFactory } from './common/validation-exception-factory';
 
 // Some hosts (e.g. Render) resolve outbound hostnames to IPv6 addresses that
 // are unroutable/very slow from there, while IPv4 works fine. This affects
@@ -33,7 +34,15 @@ async function bootstrap() {
     credentials: true,
   });
 
-  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      transform: true,
+      // Siehe validation-exception-factory.ts - sonst rein englische
+      // Fehlertexte im Frontend, egal welche UI-Sprache eingestellt ist.
+      exceptionFactory: validationExceptionFactory,
+    }),
+  );
 
   const port = process.env.PORT || 3001;
   await app.listen(port);
