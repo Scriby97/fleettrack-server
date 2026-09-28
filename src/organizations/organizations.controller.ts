@@ -356,6 +356,33 @@ export class OrganizationsController {
     return { message: 'Mitglied entfernt', id: memberId };
   }
 
+  /**
+   * DELETE /organizations/:organizationId/leave
+   * Der eingeloggte User verlässt die Organisation selbst - jede Rolle darf
+   * das (kein OrganizationRolesGuard), nur die eigene Mitgliedschaft wird
+   * entfernt. membersService.remove() blockt darin bereits den einzigen
+   * Owner (MEMBER_LAST_OWNER) - der muss die Rolle zuerst per
+   * transfer-ownership abgeben.
+   */
+  @Delete(':organizationId/leave')
+  @UseGuards(OrganizationGuard)
+  async leaveOrganization(
+    @Param('organizationId') organizationId: string,
+    @CurrentOrganizationMembership() membership: OrganizationMemberEntity,
+  ) {
+    // Nur bei einem globalen Administrator ohne eigene Mitgliedschaft in
+    // dieser Organisation moeglich (OrganizationGuard laesst ihn ohne
+    // organizationMembership durch) - fuer normale User immer gesetzt.
+    if (!membership) {
+      throw new AppForbiddenException(
+        ErrorCode.AUTH_FORBIDDEN_GENERIC,
+        'User is not a member of this organization',
+      );
+    }
+    await this.membersService.remove(organizationId, membership.id);
+    return { message: 'Organisation verlassen' };
+  }
+
   // ============================================
   // Subscription Endpoints (MÜSSEN VOR /:id STEHEN!)
   // ============================================
