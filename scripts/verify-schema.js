@@ -95,7 +95,7 @@ const expected = {
   ],
   checkConstraints: [
     'check_start_operating_hours_non_negative',
-    'check_end_operating_hours_positive',
+    'check_end_operating_hours_non_negative',
     'check_end_hours_gte_start_hours',
   ],
   indexes: [
