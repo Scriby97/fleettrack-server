@@ -4,13 +4,11 @@ import { IsNull, Repository } from 'typeorm';
 import { OrganizationEntity } from './organization.entity';
 import { OrganizationSubscriptionEntity } from './organization-subscription.entity';
 import { VehicleEntity } from '../vehicles/vehicle.entity';
-import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { CreateSelfServiceOrganizationDto } from './dto/create-self-service-organization.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
 import { OrganizationsInvitesService } from './organizations-invites.service';
 import { OrganizationSubscriptionsService } from './organization-subscriptions.service';
 import { OrganizationMembersService } from './organization-members.service';
-import { OrganizationRole } from '../auth/enums/user-role.enum';
 import { SubscriptionTier } from './enums/subscription-tier.enum';
 import {
   AppBadRequestException,
@@ -33,40 +31,6 @@ export class OrganizationsService {
     private readonly subscriptionsService: OrganizationSubscriptionsService,
     private readonly membersService: OrganizationMembersService,
   ) {}
-
-  /**
-   * Erstellt eine neue Organization und einen Invite für den ersten Admin
-   */
-  async create(
-    createOrganizationDto: CreateOrganizationDto,
-  ): Promise<{ organization: OrganizationEntity; inviteToken: string }> {
-    // 1. Erstelle Organization
-    const organization = this.organizationRepository.create({
-      name: createOrganizationDto.name,
-      subdomain: createOrganizationDto.subdomain,
-      contactEmail: createOrganizationDto.contactEmail,
-    });
-    const savedOrganization =
-      await this.organizationRepository.save(organization);
-
-    // 2. Erstelle Free-Subscription (Lieutenant) für die neue Organisation
-    await this.subscriptionsService.createDefault(savedOrganization.id);
-
-    // 3. Erstelle Invite für ersten Admin
-    const invite = await this.invitesService.createInvite(
-      savedOrganization.id,
-      {
-        email: createOrganizationDto.adminEmail,
-        role: createOrganizationDto.adminRole || OrganizationRole.ADMIN,
-      },
-      undefined, // invitedBy (wird vom System erstellt, nicht von einem User)
-    );
-
-    return {
-      organization: savedOrganization,
-      inviteToken: invite.token,
-    };
-  }
 
   /**
    * Erstellt eine Organization im Self-Service (durch einen normalen User).

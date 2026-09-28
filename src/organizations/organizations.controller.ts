@@ -17,7 +17,6 @@ import { OrganizationLogoService } from './organization-logo.service';
 import { OrganizationsInvitesService } from './organizations-invites.service';
 import { OrganizationMembersService } from './organization-members.service';
 import { OrganizationSubscriptionsService } from './organization-subscriptions.service';
-import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { CreateSelfServiceOrganizationDto } from './dto/create-self-service-organization.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
 import { UpdateOrganizationProfileDto } from './dto/update-organization-profile.dto';
@@ -102,27 +101,6 @@ export class OrganizationsController {
       await this.organizationsService.createSelfService(dto, user.id);
 
     return { organization, subscription, checkoutUrl: null };
-  }
-
-  @Post()
-  @Roles(UserRole.ADMINISTRATOR) // Nur Administratoren können Organisationen erstellen
-  async create(@Body() createOrganizationDto: CreateOrganizationDto) {
-    const result = await this.organizationsService.create(
-      createOrganizationDto,
-    );
-
-    // Generiere Invite-Link
-    const inviteLink = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/invite/accept?token=${result.inviteToken}`;
-
-    return {
-      organization: result.organization,
-      invite: {
-        token: result.inviteToken,
-        link: inviteLink,
-        email: createOrganizationDto.adminEmail,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 Tage
-      },
-    };
   }
 
   @Get()
