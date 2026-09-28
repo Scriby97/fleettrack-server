@@ -1,4 +1,11 @@
-import { IsString, Length, IsUUID, IsOptional } from 'class-validator';
+import {
+  IsString,
+  Length,
+  IsUUID,
+  IsOptional,
+  IsNumber,
+  Min,
+} from 'class-validator';
 
 export class CreateVehicleDto {
   @IsString()
@@ -10,6 +17,15 @@ export class CreateVehicleDto {
 
   @IsString()
   snowsatNumber: string;
+
+  // Betriebsstunden- bzw. Kilometerstand des Fahrzeugs zum Zeitpunkt der
+  // Erfassung (welche Einheit gilt, entscheidet vehicleType - siehe
+  // lib/vehicles/metric.ts im Frontend). Pflichtfeld, damit die erste echte
+  // Nutzung nicht faelschlich ab 0 gerechnet wird - siehe
+  // VehiclesService.create(), das daraus eine Start=Ende-Referenz-Nutzung anlegt.
+  @IsNumber()
+  @Min(0)
+  currentOperatingHours: number;
 
   @IsString()
   @IsOptional()

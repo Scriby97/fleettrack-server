@@ -126,11 +126,39 @@ export class VehiclesService {
     });
   }
 
+  /**
+   * Legt das Fahrzeug UND eine Referenz-Nutzung an (Start = Ende = der bei
+   * der Erfassung angegebene aktuelle Betriebsstunden-/Kilometerstand,
+   * 0 Liter Treibstoff) - in einer Transaktion, damit nie ein Fahrzeug ohne
+   * diese Referenz existiert. Ohne sie wuerde die naechste echte Nutzung von
+   * 0 aus gerechnet: die Inkonsistenz-Erkennung (LAG auf endOperatingHours,
+   * siehe findVehiclesWithInconsistentUsages) schluege faelschlich Alarm,
+   * und der "Stand Betriebsstunden" der Flottenuebersicht/Fahrzeug-Detailseite
+   * (beide rein aus Nutzungen abgeleitet, kein eigenes Feld am Fahrzeug)
+   * wuerde bis zur ersten echten Nutzung 0 statt des wahren Stands zeigen.
+   */
   async create(
     data: Partial<Vehicle> & { organizationId: string },
+    seed: { creatorId: string; currentOperatingHours: number },
   ): Promise<Vehicle> {
-    const v = this.repo.create(data);
-    return this.repo.save(v);
+    return this.repo.manager.transaction(async (manager) => {
+      const vehicleRepo = manager.getRepository(VehicleEntity);
+      const usageRepo = manager.getRepository(UsageEntity);
+
+      const vehicle = await vehicleRepo.save(vehicleRepo.create(data));
+
+      await usageRepo.save(
+        usageRepo.create({
+          vehicleId: vehicle.id,
+          creatorId: seed.creatorId,
+          startOperatingHours: seed.currentOperatingHours,
+          endOperatingHours: seed.currentOperatingHours,
+          fuelLitersRefilled: 0,
+        }),
+      );
+
+      return vehicle;
+    });
   }
 
   /**

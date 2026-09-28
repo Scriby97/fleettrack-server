@@ -298,7 +298,11 @@ export class VehiclesController {
       dto.organizationId,
     );
     await this.assertVehicleLimitNotExceeded(orgId);
-    return this.vehiclesService.create({ ...dto, organizationId: orgId });
+    const { currentOperatingHours, ...vehicleData } = dto;
+    return this.vehiclesService.create(
+      { ...vehicleData, organizationId: orgId },
+      { creatorId: user.id, currentOperatingHours },
+    );
   }
 
   /**

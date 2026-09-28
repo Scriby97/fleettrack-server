@@ -1,5 +1,6 @@
 import { IsNull } from 'typeorm';
 import { VehiclesService } from './vehicles.service';
+import { VehicleEntity } from './vehicle.entity';
 import { AppNotFoundException } from '../common/exceptions';
 
 /** A chainable TypeORM QueryBuilder stand-in: every method returns itself. */
@@ -23,6 +24,17 @@ function createQueryBuilderMock(terminalResults: Record<string, any> = {}) {
 
 describe('VehiclesService', () => {
   let service: VehiclesService;
+  // Die eigenen Repos der Transaktion (manager.getRepository(...) innerhalb
+  // von create()) - separat von repo/usageRepo unten, exakt wie im Vorbild
+  // OrganizationMembersService.transferOwnership (siehe dessen Spec).
+  const transactionVehicleRepo = {
+    create: jest.fn((data) => data),
+    save: jest.fn((data) => Promise.resolve({ id: 'vehicle-new', ...data })),
+  };
+  const transactionUsageRepo = {
+    create: jest.fn((data) => data),
+    save: jest.fn((data) => Promise.resolve(data)),
+  };
   const repo = {
     find: jest.fn(),
     findOne: jest.fn(),
@@ -31,6 +43,16 @@ describe('VehiclesService', () => {
     save: jest.fn((data) => Promise.resolve(data)),
     remove: jest.fn(),
     createQueryBuilder: jest.fn(),
+    manager: {
+      transaction: jest.fn((cb) =>
+        cb({
+          getRepository: (entity: unknown) =>
+            entity === VehicleEntity
+              ? transactionVehicleRepo
+              : transactionUsageRepo,
+        }),
+      ),
+    },
   };
   const usageRepo = {
     findOne: jest.fn(),
@@ -40,6 +62,14 @@ describe('VehiclesService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    transactionVehicleRepo.create.mockImplementation((data) => data);
+    transactionVehicleRepo.save.mockImplementation((data) =>
+      Promise.resolve({ id: 'vehicle-new', ...data }),
+    );
+    transactionUsageRepo.create.mockImplementation((data) => data);
+    transactionUsageRepo.save.mockImplementation((data) =>
+      Promise.resolve(data),
+    );
     service = new VehiclesService(repo as any, usageRepo as any);
   });
 
@@ -438,6 +468,51 @@ describe('VehiclesService', () => {
       );
       expect(repo.remove).toHaveBeenCalledWith(vehicle);
       expect(repo.save).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('create', () => {
+    it('creates the vehicle and a Start=Ende reference usage in the same transaction', async () => {
+      const result = await service.create(
+        {
+          name: 'Leitwolf',
+          plate: 'BE1',
+          snowsatNumber: 'SN1',
+          organizationId: 'org-1',
+        },
+        { creatorId: 'user-1', currentOperatingHours: 907.5 },
+      );
+
+      expect(result).toEqual(
+        expect.objectContaining({ id: 'vehicle-new', name: 'Leitwolf' }),
+      );
+      expect(transactionUsageRepo.create).toHaveBeenCalledWith({
+        vehicleId: 'vehicle-new',
+        creatorId: 'user-1',
+        startOperatingHours: 907.5,
+        endOperatingHours: 907.5,
+        fuelLitersRefilled: 0,
+      });
+      expect(transactionUsageRepo.save).toHaveBeenCalled();
+    });
+
+    it('accepts 0 as a valid reading for a brand-new vehicle', async () => {
+      await service.create(
+        {
+          name: 'Neu',
+          plate: 'BE2',
+          snowsatNumber: 'SN2',
+          organizationId: 'org-1',
+        },
+        { creatorId: 'user-1', currentOperatingHours: 0 },
+      );
+
+      expect(transactionUsageRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          startOperatingHours: 0,
+          endOperatingHours: 0,
+        }),
+      );
     });
   });
 });
