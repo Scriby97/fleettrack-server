@@ -5,7 +5,10 @@ import { OrganizationInviteEntity } from './entities/organization-invite.entity'
 import { OrganizationEntity } from './organization.entity';
 import { OrganizationMemberEntity } from './organization-member.entity';
 import { UserRole } from '../auth/enums/user-role.enum';
-import { AppForbiddenException, AppNotFoundException } from '../common/exceptions';
+import {
+  AppForbiddenException,
+  AppNotFoundException,
+} from '../common/exceptions';
 
 describe('OrganizationsInvitesService', () => {
   let service: OrganizationsInvitesService;
@@ -56,7 +59,9 @@ describe('OrganizationsInvitesService', () => {
 
     it('generates a fresh token and pushes the expiry 7 days out, in place', async () => {
       inviteRepository.findOne.mockResolvedValue({ ...existingInvite });
-      inviteRepository.save.mockImplementation((invite) => Promise.resolve(invite));
+      inviteRepository.save.mockImplementation((invite) =>
+        Promise.resolve(invite),
+      );
 
       const before = Date.now();
       const result = await service.renewInvite(
@@ -89,9 +94,11 @@ describe('OrganizationsInvitesService', () => {
       expect(inviteRepository.save).not.toHaveBeenCalled();
     });
 
-    it('allows a global administrator to renew any organization\'s invite', async () => {
+    it("allows a global administrator to renew any organization's invite", async () => {
       inviteRepository.findOne.mockResolvedValue({ ...existingInvite });
-      inviteRepository.save.mockImplementation((invite) => Promise.resolve(invite));
+      inviteRepository.save.mockImplementation((invite) =>
+        Promise.resolve(invite),
+      );
 
       await expect(
         service.renewInvite('invite-1', UserRole.ADMINISTRATOR, []),
@@ -100,14 +107,16 @@ describe('OrganizationsInvitesService', () => {
 
     it('allows an org admin/owner managing that organization to renew it', async () => {
       inviteRepository.findOne.mockResolvedValue({ ...existingInvite });
-      inviteRepository.save.mockImplementation((invite) => Promise.resolve(invite));
+      inviteRepository.save.mockImplementation((invite) =>
+        Promise.resolve(invite),
+      );
 
       await expect(
         service.renewInvite('invite-1', UserRole.USER, ['org-1']),
       ).resolves.toBeDefined();
     });
 
-    it('rejects a user who does not manage the invite\'s organization', async () => {
+    it("rejects a user who does not manage the invite's organization", async () => {
       inviteRepository.findOne.mockResolvedValue({ ...existingInvite });
 
       await expect(
