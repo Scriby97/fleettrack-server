@@ -16,11 +16,11 @@ export const SUBSCRIPTION_LIMITS: Record<SubscriptionTier, SubscriptionLimits> =
     [SubscriptionTier.CAPTAIN]: {
       maxVehicles: 20,
       maxMembers: 50,
-      priceChf: 49,
+      priceChf: 79,
     },
     [SubscriptionTier.GENERAL]: {
       maxVehicles: null,
       maxMembers: null,
-      priceChf: 99,
+      priceChf: 149,
     },
   };
