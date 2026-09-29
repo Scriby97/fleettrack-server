@@ -265,6 +265,24 @@ export class OrganizationsController {
     return this.invitesService.deleteInvite(inviteId, user.role, managedOrgIds);
   }
 
+  /**
+   * PATCH /organizations/invites/:inviteId/renew
+   * Erneuert eine (meist abgelaufene) Einladung: neuer Token, Ablauf wieder
+   * 7 Tage ab jetzt - dieselbe Berechtigung wie deleteInvite.
+   */
+  @Patch('invites/:inviteId/renew')
+  async renewInvite(
+    @Param('inviteId') inviteId: string,
+    @CurrentUser() user: AuthUser,
+  ) {
+    const managedOrgIds =
+      user.role === UserRole.ADMINISTRATOR
+        ? undefined
+        : await this.membersService.getManagedOrganizationIds(user.id);
+
+    return this.invitesService.renewInvite(inviteId, user.role, managedOrgIds);
+  }
+
   // ============================================
   // "Meine Organisationen" (MUSS VOR /:id STEHEN!)
   // ============================================

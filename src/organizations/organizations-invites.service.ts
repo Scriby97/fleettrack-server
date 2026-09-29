@@ -338,6 +338,48 @@ export class OrganizationsInvitesService {
   }
 
   /**
+   * Erneuert eine abgelaufene (oder noch offene) Einladung: neuer Token,
+   * Ablauf wieder 7 Tage ab jetzt - E-Mail und Rolle bleiben unveraendert.
+   * Gleiche Berechtigung wie deleteInvite: Administratoren beliebig, normale
+   * User nur als Admin/Owner der eigenen Organisation(en). Aendert dieselbe
+   * Zeile statt eine zweite anzulegen, damit nicht zwei Eintraege fuer
+   * dieselbe E-Mail in der Liste auftauchen.
+   */
+  async renewInvite(
+    inviteId: string,
+    userRole?: string,
+    managedOrganizationIds?: string[],
+  ): Promise<OrganizationInviteEntity> {
+    const invite = await this.inviteRepository.findOne({
+      where: { id: inviteId },
+    });
+
+    if (!invite) {
+      throw new AppNotFoundException(
+        ErrorCode.INVITE_NOT_FOUND,
+        'Invite not found',
+      );
+    }
+
+    if (
+      userRole !== UserRole.ADMINISTRATOR &&
+      !(managedOrganizationIds ?? []).includes(invite.organizationId)
+    ) {
+      throw new AppForbiddenException(
+        ErrorCode.INVITE_RENEW_FORBIDDEN,
+        'You can only renew invites from your organization',
+      );
+    }
+
+    invite.token = this.generateInviteToken();
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+    invite.expiresAt = expiresAt;
+
+    return this.inviteRepository.save(invite);
+  }
+
+  /**
    * Generiert einen sicheren, einzigartigen Token
    */
   private generateInviteToken(): string {
