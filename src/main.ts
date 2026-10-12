@@ -27,7 +27,11 @@ async function bootstrap() {
 
   const corsOrigins = process.env.CORS_ORIGINS
     ? process.env.CORS_ORIGINS.split(',').map((o) => o.trim())
-    : ['http://localhost:3000', 'https://fleettrack-frontend.vercel.app'];
+    : [
+        'http://localhost:3000',
+        'https://www.fleettrack.ch',
+        'https://fleettrack.ch',
+      ];
 
   app.enableCors({
     origin: corsOrigins,
