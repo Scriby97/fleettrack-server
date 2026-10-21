@@ -1,4 +1,5 @@
 import dns from 'node:dns';
+import compression from 'compression';
 import { ValidationPipe, Logger, RequestMethod } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
@@ -15,6 +16,11 @@ dns.setDefaultResultOrder('ipv4first');
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { rawBody: true });
   const logger = new Logger('Bootstrap');
+
+  // Gzip/Brotli für alle JSON-Responses - kostenlos, kein Verhaltensrisiko,
+  // spart v.a. auf schlechten mobilen Verbindungen (viele Nutzer unterwegs
+  // auf der Piste) spürbar Übertragungszeit.
+  app.use(compression());
 
   const { version, gitCommit, gitBranch } = getVersionInfo();
   logger.log(

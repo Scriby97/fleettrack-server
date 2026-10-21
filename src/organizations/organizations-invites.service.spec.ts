@@ -78,8 +78,13 @@ describe('OrganizationsInvitesService', () => {
       expect(typeof result.token).toBe('string');
       expect(result.token.length).toBeGreaterThan(0);
 
-      const expectedMin = before + 7 * 24 * 60 * 60 * 1000;
-      const expectedMax = after + 7 * 24 * 60 * 60 * 1000;
+      // +-1h Toleranz: renewInvite() rechnet mit expiresAt.setDate(+7), also
+      // in Lokalzeit - faellt der 7-Tage-Zeitraum auf eine DST-Umstellung
+      // (Winter-/Sommerzeit), verschiebt sich das Ergebnis in UTC-Millis um
+      // eine Stunde gegenueber der rohen 7*24h-Millisekundenrechnung hier.
+      const oneHourMs = 60 * 60 * 1000;
+      const expectedMin = before + 7 * 24 * 60 * 60 * 1000 - oneHourMs;
+      const expectedMax = after + 7 * 24 * 60 * 60 * 1000 + oneHourMs;
       expect(result.expiresAt.getTime()).toBeGreaterThanOrEqual(expectedMin);
       expect(result.expiresAt.getTime()).toBeLessThanOrEqual(expectedMax);
       expect(inviteRepository.save).toHaveBeenCalledWith(result);
