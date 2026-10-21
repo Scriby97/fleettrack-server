@@ -11,6 +11,9 @@ export interface Vehicle {
   plate: string;
   snowsatNumber: string;
   isRetired?: boolean;
+  // Nur gesetzt, wenn findAll() mit includeLastOperatingHours=true
+  // aufgerufen wurde (siehe dort) - sonst undefined, nicht null.
+  lastOperatingHours?: number | null;
 }
 
 export interface VehicleStats {
@@ -82,11 +85,21 @@ export class VehiclesService {
   /**
    * @param organizationIds - undefined = kein Org-Filter (nur für Administratoren zulässig),
    * leeres Array = User gehört keiner Organisation an -> keine Fahrzeuge sichtbar
+   * @param includeLastOperatingHours - haengt pro Fahrzeug den endOperatingHours-
+   * Wert der chronologisch letzten Nutzung an (sonst bleibt lastOperatingHours
+   * undefined). Fuer "Nutzung erfassen": ohne das muesste das Frontend nach
+   * dem Laden der Fahrzeuge noch einen zweiten Request pro Standardfahrzeug
+   * nachschieben (GET /vehicles/:id/last-operating-hours), was den ersten
+   * Render des Formulars unnoetig um einen vollen Roundtrip verzoegert. Bleibt
+   * default false, damit andere Aufrufer (Flottenuebersicht, Fahrzeugauswahl
+   * in Dialogen etc.) nicht die zusaetzliche Query mitzahlen, die sie gar
+   * nicht brauchen.
    */
   async findAll(
     organizationIds?: string[],
     includeRetired = false,
     includeArchived = false,
+    includeLastOperatingHours = false,
   ): Promise<Vehicle[]> {
     if (organizationIds && organizationIds.length === 0) {
       return [];
@@ -106,7 +119,48 @@ export class VehiclesService {
       where.archivedAt = IsNull();
     }
 
-    return this.repo.find({ where });
+    const vehicles = await this.repo.find({ where });
+
+    if (!includeLastOperatingHours || vehicles.length === 0) {
+      return vehicles;
+    }
+
+    const lastHoursByVehicleId = await this.getLastOperatingHoursByVehicleIds(
+      vehicles.map((v) => v.id),
+    );
+
+    return vehicles.map((v) => ({
+      ...v,
+      lastOperatingHours: lastHoursByVehicleId.get(v.id) ?? null,
+    }));
+  }
+
+  /**
+   * Letzte endOperatingHours mehrerer Fahrzeuge auf einmal (eine Query statt
+   * einer pro Fahrzeug) - Hilfsmethode fuer findAll(includeLastOperatingHours).
+   */
+  private async getLastOperatingHoursByVehicleIds(
+    vehicleIds: string[],
+  ): Promise<Map<string, number | null>> {
+    const raw = await this.usageRepo
+      .createQueryBuilder('u')
+      .select('u.vehicleId', 'vehicleId')
+      .addSelect(
+        '(ARRAY_AGG(u.endOperatingHours ORDER BY u.usageDate DESC))[1]',
+        'lastOperatingHours',
+      )
+      .where('u.vehicleId IN (:...vehicleIds)', { vehicleIds })
+      .groupBy('u.vehicleId')
+      .getRawMany<{ vehicleId: string; lastOperatingHours: string | null }>();
+
+    return new Map(
+      raw.map((r) => [
+        r.vehicleId,
+        r.lastOperatingHours === null || r.lastOperatingHours === undefined
+          ? null
+          : Number(r.lastOperatingHours),
+      ]),
+    );
   }
 
   /**

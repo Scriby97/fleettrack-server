@@ -53,7 +53,12 @@ describe('VehiclesController', () => {
 
       await controller.getAll(adminUser);
 
-      expect(vehiclesService.findAll).toHaveBeenCalledWith(undefined);
+      expect(vehiclesService.findAll).toHaveBeenCalledWith(
+        undefined,
+        undefined,
+        undefined,
+        false,
+      );
       expect(membersService.getOrganizationIds).not.toHaveBeenCalled();
     });
 
@@ -63,7 +68,25 @@ describe('VehiclesController', () => {
 
       await controller.getAll(normalUser);
 
-      expect(vehiclesService.findAll).toHaveBeenCalledWith(['org-a', 'org-b']);
+      expect(vehiclesService.findAll).toHaveBeenCalledWith(
+        ['org-a', 'org-b'],
+        undefined,
+        undefined,
+        false,
+      );
+    });
+
+    it('passes includeLastOperatingHours through when requested', async () => {
+      vehiclesService.findAll.mockResolvedValue([]);
+
+      await controller.getAll(adminUser, undefined, 'true');
+
+      expect(vehiclesService.findAll).toHaveBeenCalledWith(
+        undefined,
+        undefined,
+        undefined,
+        true,
+      );
     });
 
     it('rejects a normal user requesting an organization they are not a member of', async () => {

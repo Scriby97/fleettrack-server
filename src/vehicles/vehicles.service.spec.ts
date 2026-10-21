@@ -108,6 +108,40 @@ describe('VehiclesService', () => {
       const call = repo.find.mock.calls[0][0];
       expect(call.where.organizationId).toBeUndefined();
     });
+
+    it('does not run the extra query when includeLastOperatingHours is not requested', async () => {
+      repo.find.mockResolvedValue([
+        { id: 'v1', name: 'A', plate: 'P', snowsatNumber: 'S' },
+      ]);
+
+      const result = await service.findAll(['org-a']);
+
+      expect(usageRepo.createQueryBuilder).not.toHaveBeenCalled();
+      expect(result[0].lastOperatingHours).toBeUndefined();
+    });
+
+    it('attaches lastOperatingHours per vehicle in one extra query when requested', async () => {
+      repo.find.mockResolvedValue([
+        { id: 'v1', name: 'A', plate: 'P1', snowsatNumber: 'S1' },
+        { id: 'v2', name: 'B', plate: 'P2', snowsatNumber: 'S2' },
+      ]);
+      const qb = createQueryBuilderMock({
+        rawMany: [
+          { vehicleId: 'v1', lastOperatingHours: '42.5' },
+          // v2 absichtlich ohne Eintrag - Fahrzeug ohne Nutzung
+        ],
+      });
+      usageRepo.createQueryBuilder.mockReturnValue(qb);
+
+      const result = await service.findAll(['org-a'], false, false, true);
+
+      expect(usageRepo.createQueryBuilder).toHaveBeenCalledTimes(1);
+      expect(qb.where).toHaveBeenCalledWith('u.vehicleId IN (:...vehicleIds)', {
+        vehicleIds: ['v1', 'v2'],
+      });
+      expect(result.find((v) => v.id === 'v1')?.lastOperatingHours).toBe(42.5);
+      expect(result.find((v) => v.id === 'v2')?.lastOperatingHours).toBeNull();
+    });
   });
 
   describe('countActive', () => {

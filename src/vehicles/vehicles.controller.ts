@@ -70,14 +70,23 @@ export class VehiclesController {
    * Alle Fahrzeuge abrufen (benötigt Auth)
    * Administratoren sehen alle oder können mit ?organizationId=... filtern
    * Andere Rollen sehen nur ihre eigenen Organisation(en)
+   * ?includeLastOperatingHours=true haengt pro Fahrzeug lastOperatingHours an
+   * (siehe VehiclesService.findAll) - spart "Nutzung erfassen" den sonst
+   * noetigen zweiten Request fuer den Start-Zaehlerstand des Standardfahrzeugs.
    */
   @Get()
   async getAll(
     @CurrentUser() user: AuthUser,
     @Query('organizationId') queryOrgId?: string,
+    @Query('includeLastOperatingHours') includeLastOperatingHours?: string,
   ) {
     const organizationIds = await this.resolveOrganizationIds(user, queryOrgId);
-    return this.vehiclesService.findAll(organizationIds);
+    return this.vehiclesService.findAll(
+      organizationIds,
+      undefined,
+      undefined,
+      includeLastOperatingHours === 'true',
+    );
   }
 
   /**
