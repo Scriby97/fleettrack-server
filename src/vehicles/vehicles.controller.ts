@@ -24,6 +24,7 @@ import {
   ErrorCode,
 } from '../common/exceptions';
 import { parseOptionalDateRange } from '../common/utils/date-range.util';
+import { RealtimeService } from '../realtime/realtime.service';
 
 @Controller('vehicles')
 export class VehiclesController {
@@ -31,6 +32,7 @@ export class VehiclesController {
     private readonly vehiclesService: VehiclesService,
     private readonly membersService: OrganizationMembersService,
     private readonly subscriptionsService: OrganizationSubscriptionsService,
+    private readonly realtimeService: RealtimeService,
   ) {}
 
   /**
@@ -308,10 +310,15 @@ export class VehiclesController {
     );
     await this.assertVehicleLimitNotExceeded(orgId);
     const { currentOperatingHours, ...vehicleData } = dto;
-    return this.vehiclesService.create(
+    const created = await this.vehiclesService.create(
       { ...vehicleData, organizationId: orgId },
       { creatorId: user.id, currentOperatingHours },
     );
+
+    // Siehe DataFreshnessContext im Frontend.
+    this.realtimeService.publish(orgId);
+
+    return created;
   }
 
   /**
@@ -334,7 +341,9 @@ export class VehiclesController {
       );
     }
     await this.assertCanManageVehicle(user, vehicle);
-    return this.vehiclesService.update(id, dto);
+    const updated = await this.vehiclesService.update(id, dto);
+    this.realtimeService.publish(vehicle.organizationId);
+    return updated;
   }
 
   /**
@@ -355,6 +364,8 @@ export class VehiclesController {
       );
     }
     await this.assertCanManageVehicle(user, vehicle);
-    return this.vehiclesService.delete(id);
+    const result = await this.vehiclesService.delete(id);
+    this.realtimeService.publish(vehicle.organizationId);
+    return result;
   }
 }

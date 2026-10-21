@@ -3,6 +3,7 @@ import { UsagesController } from './usages.controller';
 import { UsagesService } from './usages.service';
 import { VehiclesService } from '../vehicles/vehicles.service';
 import { OrganizationMembersService } from '../organizations/organization-members.service';
+import { RealtimeService } from '../realtime/realtime.service';
 import { UserRole, OrganizationRole } from '../auth/enums/user-role.enum';
 import type { AuthUser } from '../auth/decorators/current-user.decorator';
 import type { CreateUsageDto } from './dto/create-usage.dto';
@@ -36,6 +37,9 @@ describe('UsagesController', () => {
     getOrganizationIds: jest.fn(),
     findMembership: jest.fn(),
   };
+  const realtimeService = {
+    publish: jest.fn(),
+  };
 
   const adminUser: AuthUser = { id: 'admin-1', role: UserRole.ADMINISTRATOR };
   const employee: AuthUser = { id: 'employee-1', role: UserRole.USER };
@@ -53,6 +57,7 @@ describe('UsagesController', () => {
         { provide: UsagesService, useValue: usagesService },
         { provide: VehiclesService, useValue: vehiclesService },
         { provide: OrganizationMembersService, useValue: membersService },
+        { provide: RealtimeService, useValue: realtimeService },
       ],
     }).compile();
 
@@ -357,6 +362,29 @@ describe('UsagesController', () => {
 
       expect(usagesService.create).toHaveBeenCalled();
     });
+
+    it("publishes a realtime change signal for the vehicle's organization after saving", async () => {
+      membersService.getOrganizationIds.mockResolvedValue(['org-a']);
+      vehiclesService.findOne.mockResolvedValue({
+        id: 'v1',
+        organizationId: 'org-a',
+      });
+      usagesService.create.mockResolvedValue({
+        id: 'usage-1',
+        vehicleId: 'v1',
+      });
+      const dto: CreateUsageDto = {
+        vehicleId: 'v1',
+        startOperatingHours: 1,
+        endOperatingHours: 2,
+        fuelLitersRefilled: 0,
+        usageDate: new Date(),
+      };
+
+      await controller.create(dto, employee);
+
+      expect(realtimeService.publish).toHaveBeenCalledWith('org-a');
+    });
   });
 
   describe('create (hours continuity)', () => {
@@ -457,6 +485,26 @@ describe('UsagesController', () => {
         controller.update('missing', emptyUpdate, employee),
       ).rejects.toThrow(AppNotFoundException);
     });
+
+    it("publishes a realtime change signal for the vehicle's organization after saving", async () => {
+      usagesService.findOne.mockResolvedValue({
+        id: 'usage-1',
+        creatorId: employee.id,
+        vehicle: { organizationId: 'org-a' },
+      });
+      usagesService.update.mockResolvedValue({
+        id: 'usage-1',
+        vehicleId: 'v1',
+      });
+      vehiclesService.findOne.mockResolvedValue({
+        id: 'v1',
+        organizationId: 'org-a',
+      });
+
+      await controller.update('usage-1', emptyUpdate, employee);
+
+      expect(realtimeService.publish).toHaveBeenCalledWith('org-a');
+    });
   });
 
   describe('update (hours continuity)', () => {
@@ -546,10 +594,38 @@ describe('UsagesController', () => {
     });
 
     it('always allows a global administrator', async () => {
+      usagesService.findOne.mockResolvedValue({
+        id: 'usage-1',
+        creatorId: 'someone-else',
+        vehicle: { organizationId: 'org-a' },
+      });
+
       await controller.remove('usage-1', adminUser);
 
-      expect(usagesService.findOne).not.toHaveBeenCalled();
+      // findOne() wird jetzt auch fuer Admins aufgerufen, um vor dem Loeschen
+      // die Organisation fuer das Realtime-Invalidierungs-Signal zu ermitteln
+      // (siehe realtimeService.publish unten) - anders als frueher.
       expect(usagesService.delete).toHaveBeenCalledWith('usage-1');
+    });
+
+    it("publishes a realtime change signal for the usage's organization after deleting", async () => {
+      usagesService.findOne.mockResolvedValue({
+        id: 'usage-1',
+        creatorId: 'someone-else',
+        vehicle: { organizationId: 'org-a' },
+      });
+
+      await controller.remove('usage-1', adminUser);
+
+      expect(realtimeService.publish).toHaveBeenCalledWith('org-a');
+    });
+
+    it('does not publish when the usage (or its vehicle) can no longer be found', async () => {
+      usagesService.findOne.mockResolvedValue(null);
+
+      await controller.remove('usage-1', adminUser);
+
+      expect(realtimeService.publish).not.toHaveBeenCalled();
     });
   });
 });

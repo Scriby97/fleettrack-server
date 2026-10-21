@@ -22,6 +22,8 @@ import { AuthModule } from './auth/auth.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { BillingModule } from './billing/billing.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { RealtimeController } from './realtime/realtime.controller';
+import { RealtimeService } from './realtime/realtime.service';
 
 @Module({
   imports: [
@@ -67,7 +69,12 @@ import { NotificationsModule } from './notifications/notifications.module';
     BillingModule,
     NotificationsModule,
   ],
-  controllers: [AppController, VehiclesController, UsagesController],
-  providers: [AppService, VehiclesService, UsagesService],
+  controllers: [
+    AppController,
+    VehiclesController,
+    UsagesController,
+    RealtimeController,
+  ],
+  providers: [AppService, VehiclesService, UsagesService, RealtimeService],
 })
 export class AppModule {}

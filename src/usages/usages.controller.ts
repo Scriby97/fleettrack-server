@@ -26,6 +26,7 @@ import {
 } from '../common/exceptions';
 import { parseOptionalDateRange } from '../common/utils/date-range.util';
 import { decodeUsageCursor, parseOptionalLimit } from './usage-cursor.util';
+import { RealtimeService } from '../realtime/realtime.service';
 
 @Controller('usages')
 export class UsagesController {
@@ -33,6 +34,7 @@ export class UsagesController {
     private readonly usagesService: UsagesService,
     private readonly vehiclesService: VehiclesService,
     private readonly membersService: OrganizationMembersService,
+    private readonly realtimeService: RealtimeService,
   ) {}
 
   /**
@@ -238,7 +240,17 @@ export class UsagesController {
       usageDate: dto.usageDate,
       creatorId: user.id,
     };
-    return this.usagesService.create(partial);
+    const saved = await this.usagesService.create(partial);
+
+    // Siehe DataFreshnessContext im Frontend - markiert gecachte
+    // Nutzungslisten/Fahrzeug-Stats der betroffenen Organisation als
+    // veraltet, damit andere offene Tabs/Geraete zeitnah neu laden.
+    const vehicle = await this.vehiclesService.findOne(saved.vehicleId);
+    if (vehicle) {
+      this.realtimeService.publish(vehicle.organizationId);
+    }
+
+    return saved;
   }
 
   /**
@@ -275,11 +287,19 @@ export class UsagesController {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { confirmDespiteWarning, ...partial } = dto;
     // Bearbeiter/Zeitpunkt immer serverseitig setzen - nie aus dem Request.
-    return this.usagesService.update(id, {
+    const updated = await this.usagesService.update(id, {
       ...(partial as Partial<UsageEntity>),
       lastUpdaterId: user.id,
       lastUpdateDate: Date.now(),
     });
+
+    // Siehe create() oben - dieselbe Invalidierung nach erfolgreicher Aenderung.
+    const vehicle = await this.vehiclesService.findOne(updated.vehicleId);
+    if (vehicle) {
+      this.realtimeService.publish(vehicle.organizationId);
+    }
+
+    return updated;
   }
 
   /**
@@ -343,7 +363,16 @@ export class UsagesController {
       await this.assertCanManageUsage(id, user);
     }
 
+    // Vor dem Loeschen ermitteln, sonst ist die Organisation danach nicht
+    // mehr auffindbar (siehe create()/update() oben fuer dieselbe Invalidierung).
+    const usage = await this.usagesService.findOne(id);
+
     await this.usagesService.delete(id);
+
+    if (usage?.vehicle) {
+      this.realtimeService.publish(usage.vehicle.organizationId);
+    }
+
     return { message: 'Usage gelöscht', id };
   }
 

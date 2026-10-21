@@ -3,6 +3,7 @@ import { VehiclesController } from './vehicles.controller';
 import { VehiclesService } from './vehicles.service';
 import { OrganizationMembersService } from '../organizations/organization-members.service';
 import { OrganizationSubscriptionsService } from '../organizations/organization-subscriptions.service';
+import { RealtimeService } from '../realtime/realtime.service';
 import { UserRole } from '../auth/enums/user-role.enum';
 import type { AuthUser } from '../auth/decorators/current-user.decorator';
 import {
@@ -20,11 +21,21 @@ describe('VehiclesController', () => {
     usageHistory: jest.fn(),
     getLastOperatingHours: jest.fn(),
     findVehicleIdsWithInconsistentUsages: jest.fn(),
+    create: jest.fn(),
+    update: jest.fn(),
+    delete: jest.fn(),
+    countActive: jest.fn(),
   };
   const membersService = {
     getOrganizationIds: jest.fn(),
+    findMembership: jest.fn(),
   };
-  const subscriptionsService = {};
+  const subscriptionsService = {
+    getLimits: jest.fn(),
+  };
+  const realtimeService = {
+    publish: jest.fn(),
+  };
 
   const adminUser: AuthUser = { id: 'admin-1', role: UserRole.ADMINISTRATOR };
   const normalUser: AuthUser = { id: 'user-1', role: UserRole.USER };
@@ -41,6 +52,7 @@ describe('VehiclesController', () => {
           provide: OrganizationSubscriptionsService,
           useValue: subscriptionsService,
         },
+        { provide: RealtimeService, useValue: realtimeService },
       ],
     }).compile();
 
@@ -198,6 +210,48 @@ describe('VehiclesController', () => {
         new Date('2025-01-01T00:00:00.000Z'),
         new Date('2025-02-01T00:00:00.000Z'),
       );
+    });
+  });
+
+  describe('realtime change signal (siehe DataFreshnessContext im Frontend)', () => {
+    it('publishes for the organization after creating a vehicle', async () => {
+      subscriptionsService.getLimits.mockResolvedValue({ maxVehicles: null });
+      vehiclesService.create.mockResolvedValue({ id: 'v1' });
+
+      await controller.create(
+        {
+          organizationId: 'org-a',
+          name: 'Pistenbully',
+          plate: 'BE 1',
+        } as never,
+        adminUser,
+      );
+
+      expect(realtimeService.publish).toHaveBeenCalledWith('org-a');
+    });
+
+    it('publishes for the organization after updating a vehicle', async () => {
+      vehiclesService.findOne.mockResolvedValue({
+        id: 'v1',
+        organizationId: 'org-a',
+      });
+      vehiclesService.update.mockResolvedValue({ id: 'v1' });
+
+      await controller.update('v1', {} as never, adminUser);
+
+      expect(realtimeService.publish).toHaveBeenCalledWith('org-a');
+    });
+
+    it('publishes for the organization after deleting a vehicle', async () => {
+      vehiclesService.findOne.mockResolvedValue({
+        id: 'v1',
+        organizationId: 'org-a',
+      });
+      vehiclesService.delete.mockResolvedValue(undefined);
+
+      await controller.delete('v1', adminUser);
+
+      expect(realtimeService.publish).toHaveBeenCalledWith('org-a');
     });
   });
 });
