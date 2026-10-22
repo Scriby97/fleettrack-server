@@ -14,7 +14,7 @@ export class UsageReminderEntity {
   @Column({ type: 'uuid', unique: true })
   userId: string;
 
-  @Column({ default: true })
+  @Column({ default: false })
   enabled: boolean;
 
   // Format "HH:mm", ausgewertet in der Zeitzone der timezone-Spalte.

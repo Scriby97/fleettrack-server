@@ -17,11 +17,9 @@ export class NotificationsService {
   /**
    * Erinnerungs-Einstellungen des Users - falls noch keine existieren, ein
    * Default-Objekt zurueckgeben statt 404 (einfacher fuers Frontend). Default
-   * ist bewusst bereits aktiviert (20:30), damit ein User, der die Einstellungen
-   * noch nie angefasst hat, beim ersten Speichern nicht zusaetzlich noch den
-   * Schalter umlegen und die Zeit setzen muss - persistiert wird trotzdem erst
-   * durch updateReminder (und die Browser-Berechtigung muss der User ohnehin
-   * explizit erteilen, das kann kein Default ersetzen).
+   * ist aus (20:30) - eingeschaltet wird erst, wenn der User zustimmt
+   * (NotificationPermissionPrompt bzw. Einstellungsseite). Ohne id erkennt das
+   * Frontend, dass der User noch nie gefragt wurde.
    */
   async getReminder(userId: string): Promise<UsageReminderEntity> {
     const existing = await this.reminderRepository.findOne({
@@ -31,7 +29,7 @@ export class NotificationsService {
 
     return this.reminderRepository.create({
       userId,
-      enabled: true,
+      enabled: false,
       reminderTime: '20:30',
       timezone: 'Europe/Zurich',
     });
