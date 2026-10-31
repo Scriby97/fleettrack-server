@@ -104,6 +104,33 @@ export class UsagesController {
   }
 
   /**
+   * Erfasser-Filter inkl. optionaler Auswahl (?creatorId=...): Admin/Owner
+   * duerfen auf eine beliebige Person einschraenken, Mitarbeiter nur ihre
+   * eigene ID angeben (ohne Angabe ohnehin nur die eigenen Usages).
+   */
+  private async resolveCreatorId(
+    user: AuthUser,
+    organizationIds: string[] | undefined,
+    requestedCreatorId?: string,
+  ): Promise<string | undefined> {
+    const ownCreatorFilter = await this.resolveCreatorIdFilter(
+      user,
+      organizationIds,
+    );
+    if (
+      requestedCreatorId &&
+      ownCreatorFilter &&
+      requestedCreatorId !== ownCreatorFilter
+    ) {
+      throw new AppForbiddenException(
+        ErrorCode.AUTH_FORBIDDEN_GENERIC,
+        'Mitarbeiter dürfen nur ihre eigenen Nutzungen sehen',
+      );
+    }
+    return requestedCreatorId || ownCreatorFilter;
+  }
+
+  /**
    * GET /usages/with-vehicles
    * Alle Nutzungen mit Fahrzeug-Daten abrufen (benötigt Auth)
    * Administratoren sehen alle Usages oder können mit ?organizationId=... filtern.
@@ -117,6 +144,8 @@ export class UsagesController {
    * Treffer geliefert (Kalenderansicht, dort ist der Zeitraum ein Monat/eine Woche).
    * Optional ?vehicleId=... schraenkt auf ein einzelnes Fahrzeug ein (Nutzungen-Tab
    * der Fahrzeug-Detailseite).
+   * Optional ?creatorId=... schraenkt auf die Nutzungen einer Person ein
+   * (Erfasser-Auswahl fuer Admin/Owner, siehe resolveCreatorId).
    */
   @Get('with-vehicles')
   async getAllWithVehicles(
@@ -127,9 +156,14 @@ export class UsagesController {
     @Query('limit') limitParam?: string,
     @Query('cursor') cursorParam?: string,
     @Query('vehicleId') vehicleId?: string,
+    @Query('creatorId') requestedCreatorId?: string,
   ) {
     const organizationIds = await this.resolveOrganizationIds(user, queryOrgId);
-    const creatorId = await this.resolveCreatorIdFilter(user, organizationIds);
+    const creatorId = await this.resolveCreatorId(
+      user,
+      organizationIds,
+      requestedCreatorId,
+    );
     const { startDate, endDate } = parseOptionalDateRange(
       startDateParam,
       endDateParam,
@@ -184,6 +218,7 @@ export class UsagesController {
    * Mitarbeiter (employee) nur ihre eigenen.
    * Optional ?startDate=...&endDate=... (ISO-Datetime, nur zusammen) fuer die
    * Zeitraum-Filterung nach usageDate - ohne Angabe komplette Historie.
+   * Optional ?creatorId=... (siehe resolveCreatorId).
    */
   @Get()
   async getAll(
@@ -191,9 +226,14 @@ export class UsagesController {
     @Query('organizationId') queryOrgId?: string,
     @Query('startDate') startDateParam?: string,
     @Query('endDate') endDateParam?: string,
+    @Query('creatorId') requestedCreatorId?: string,
   ) {
     const organizationIds = await this.resolveOrganizationIds(user, queryOrgId);
-    const creatorId = await this.resolveCreatorIdFilter(user, organizationIds);
+    const creatorId = await this.resolveCreatorId(
+      user,
+      organizationIds,
+      requestedCreatorId,
+    );
     const { startDate, endDate } = parseOptionalDateRange(
       startDateParam,
       endDateParam,

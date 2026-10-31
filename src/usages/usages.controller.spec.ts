@@ -113,6 +113,69 @@ describe('UsagesController', () => {
     });
   });
 
+  describe('getAllWithVehicles (creatorId selection)', () => {
+    const call = (user: AuthUser, creatorId?: string) =>
+      controller.getAllWithVehicles(
+        user,
+        'org-a',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        creatorId,
+      );
+
+    beforeEach(() => {
+      membersService.getOrganizationIds.mockResolvedValue(['org-a']);
+      usagesService.findAllWithVehicles.mockResolvedValue({
+        usages: [],
+        nextCursor: null,
+      });
+    });
+
+    it('lets an organization admin/owner filter by any creator', async () => {
+      membersService.findMembership.mockResolvedValue({
+        role: OrganizationRole.OWNER,
+      });
+
+      await call(orgAdmin, 'someone-else');
+
+      expect(usagesService.findAllWithVehicles).toHaveBeenCalledWith(
+        ['org-a'],
+        'someone-else',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+      );
+    });
+
+    it('lets an employee pass their own id', async () => {
+      membersService.findMembership.mockResolvedValue({
+        role: OrganizationRole.EMPLOYEE,
+      });
+
+      await call(employee, employee.id);
+
+      expect(usagesService.findAllWithVehicles.mock.calls[0][1]).toBe(
+        employee.id,
+      );
+    });
+
+    it('forbids an employee to look at someone else', async () => {
+      membersService.findMembership.mockResolvedValue({
+        role: OrganizationRole.EMPLOYEE,
+      });
+
+      await expect(call(employee, 'someone-else')).rejects.toBeInstanceOf(
+        AppForbiddenException,
+      );
+      expect(usagesService.findAllWithVehicles).not.toHaveBeenCalled();
+    });
+  });
+
   describe('getAll (date range)', () => {
     it('parses and forwards a valid startDate/endDate pair', async () => {
       usagesService.findAll.mockResolvedValue([]);
