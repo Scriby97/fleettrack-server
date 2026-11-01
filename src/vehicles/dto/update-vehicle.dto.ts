@@ -6,7 +6,7 @@ export class UpdateVehicleDto {
   name?: string;
 
   @IsString()
-  @Length(1, 20)
+  @Length(0, 20)
   @IsOptional()
   plate?: string;
 

@@ -11,9 +11,12 @@ export class CreateVehicleDto {
   @IsString()
   name: string;
 
+  // Optional: nicht jedes Fahrzeug hat zum Erfassungszeitpunkt schon ein
+  // Kontrollschild (z.B. frisch angeliefert, noch nicht eingeloest).
   @IsString()
-  @Length(1, 20)
-  plate: string;
+  @IsOptional()
+  @Length(0, 20)
+  plate?: string;
 
   @IsString()
   snowsatNumber: string;

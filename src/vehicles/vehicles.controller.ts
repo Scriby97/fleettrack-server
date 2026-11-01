@@ -311,7 +311,9 @@ export class VehiclesController {
     await this.assertVehicleLimitNotExceeded(orgId);
     const { currentOperatingHours, ...vehicleData } = dto;
     const created = await this.vehiclesService.create(
-      { ...vehicleData, organizationId: orgId },
+      // plate ist DB-seitig NOT NULL (ohne Default) - ein fehlendes plate im
+      // DTO (jetzt optional) muss daher explizit als Leerstring ankommen.
+      { ...vehicleData, plate: vehicleData.plate ?? '', organizationId: orgId },
       { creatorId: user.id, currentOperatingHours },
     );
 
