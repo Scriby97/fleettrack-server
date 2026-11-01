@@ -10,6 +10,7 @@ import {
   UseInterceptors,
   UploadedFile,
   Query,
+  Logger,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { OrganizationsService } from './organizations.service';
@@ -40,7 +41,10 @@ import {
   CurrentOrganizationMembership,
 } from '../auth/decorators/current-organization.decorator';
 import type { OrganizationMemberEntity } from './organization-member.entity';
-import { StripeService } from '../billing/stripe.service';
+import {
+  StripeService,
+  StripeSubscriptionNotFoundError,
+} from '../billing/stripe.service';
 import {
   AppBadRequestException,
   AppForbiddenException,
@@ -50,6 +54,8 @@ import {
 @Controller('organizations')
 @UseGuards(SupabaseAuthGuard, RolesGuard)
 export class OrganizationsController {
+  private readonly logger = new Logger(OrganizationsController.name);
+
   constructor(
     private readonly organizationsService: OrganizationsService,
     private readonly invitesService: OrganizationsInvitesService,
@@ -487,10 +493,30 @@ export class OrganizationsController {
         'Keine aktive Stripe Subscription für diese Organisation gefunden',
       );
     }
-    await this.stripeService.changeSubscriptionTier({
-      stripeSubscriptionId: current.stripeSubscriptionId,
-      newTier: dto.tier,
-    });
+    try {
+      await this.stripeService.changeSubscriptionTier({
+        stripeSubscriptionId: current.stripeSubscriptionId,
+        newTier: dto.tier,
+      });
+    } catch (err) {
+      if (err instanceof StripeSubscriptionNotFoundError) {
+        // Die gespeicherte stripeSubscriptionId existiert in Stripe nicht (mehr) -
+        // z.B. eine Test-Mode-Subscription von vor dem Wechsel auf den Live-Key.
+        // Statt hart fehlzuschlagen: wie beim Upgrade ab Lieutenant behandeln und
+        // eine neue Checkout Session erstellen - deren Webhook ersetzt die
+        // veraltete stripeSubscriptionId/-CustomerId danach mit gueltigen Werten.
+        this.logger.warn(
+          `${err.message} - organizationId=${organizationId}, falle auf neuen Checkout zurück`,
+        );
+        const checkoutUrl = await this.stripeService.createCheckoutSession({
+          organizationId,
+          tier: dto.tier,
+          customerEmail: user.email,
+        });
+        return { ...current, checkoutUrl };
+      }
+      throw err;
+    }
     return this.subscriptionsService.updateTier(organizationId, dto.tier);
   }
 

@@ -7,6 +7,22 @@ import {
   ErrorCode,
 } from '../common/exceptions';
 
+/**
+ * Die in der DB gespeicherte stripeSubscriptionId existiert in Stripe nicht
+ * (mehr) - z.B. weil sie im Test-Modus erzeugt wurde, der Server inzwischen
+ * aber mit dem Live-Secret-Key laeuft (Test- und Live-Subscriptions sind bei
+ * Stripe komplett getrennte Namensraeume). Eigene Fehlerklasse, damit der
+ * Aufrufer das gezielt von anderen Stripe-Fehlern unterscheiden und auf einen
+ * neuen Checkout (wie beim Upgrade ab Lieutenant) ausweichen kann, statt den
+ * Wechsel einfach fehlschlagen zu lassen.
+ */
+export class StripeSubscriptionNotFoundError extends Error {
+  constructor(public readonly stripeSubscriptionId: string) {
+    super(`Stripe Subscription ${stripeSubscriptionId} nicht gefunden`);
+    this.name = 'StripeSubscriptionNotFoundError';
+  }
+}
+
 @Injectable()
 export class StripeService {
   private readonly logger = new Logger(StripeService.name);
@@ -241,9 +257,20 @@ export class StripeService {
     const stripe = this.getClientOrThrow();
     const newPriceId = this.getPriceIdForTier(params.newTier);
 
-    const subscription = await stripe.subscriptions.retrieve(
-      params.stripeSubscriptionId,
-    );
+    let subscription: Stripe.Subscription;
+    try {
+      subscription = await stripe.subscriptions.retrieve(
+        params.stripeSubscriptionId,
+      );
+    } catch (err) {
+      if (
+        err instanceof Stripe.errors.StripeInvalidRequestError &&
+        err.code === 'resource_missing'
+      ) {
+        throw new StripeSubscriptionNotFoundError(params.stripeSubscriptionId);
+      }
+      throw err;
+    }
     const currentItem = subscription.items.data[0];
     if (!currentItem) {
       throw new AppInternalServerErrorException(
