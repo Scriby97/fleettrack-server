@@ -77,7 +77,7 @@ describe('OrganizationSubscriptionsService', () => {
 
     it('archives members (except owner) and vehicles when over the free-tier limit', async () => {
       subscriptionRepository.findOne.mockResolvedValue({ ...baseSubscription });
-      vehicleRepository.count.mockResolvedValue(5); // > maxVehicles (3)
+      vehicleRepository.count.mockResolvedValue(10); // > maxVehicles (8)
       membersService.countByOrganization.mockResolvedValue(1);
 
       await service.downgradeToFree('org-1');

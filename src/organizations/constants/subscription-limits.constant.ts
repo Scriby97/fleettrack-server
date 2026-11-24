@@ -9,8 +9,8 @@ export interface SubscriptionLimits {
 export const SUBSCRIPTION_LIMITS: Record<SubscriptionTier, SubscriptionLimits> =
   {
     [SubscriptionTier.LIEUTENANT]: {
-      maxVehicles: 3,
-      maxMembers: 6,
+      maxVehicles: 8,
+      maxMembers: 13,
       priceChf: 0,
     },
     [SubscriptionTier.CAPTAIN]: {
