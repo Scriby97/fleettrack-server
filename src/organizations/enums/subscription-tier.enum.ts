@@ -1,5 +1,5 @@
 export enum SubscriptionTier {
-  LIEUTENANT = 'lieutenant', // Free - bis 2 Fahrzeuge, 5 Mitarbeiter
+  LIEUTENANT = 'lieutenant', // Free - bis 3 Fahrzeuge, 6 Mitarbeiter
   CAPTAIN = 'captain', // CHF 69.-/Monat - bis 20 Fahrzeuge, 50 Mitarbeiter
   GENERAL = 'general', // CHF 139.-/Monat - unlimitiert
 }
