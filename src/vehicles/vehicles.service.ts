@@ -3,7 +3,11 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Between, FindOptionsWhere, In, IsNull, Repository } from 'typeorm';
 import { VehicleEntity } from './vehicle.entity';
 import { UsageEntity } from '../usages/usage.entity';
-import { AppNotFoundException, ErrorCode } from '../common/exceptions';
+import {
+  AppConflictException,
+  AppNotFoundException,
+  ErrorCode,
+} from '../common/exceptions';
 
 export interface Vehicle {
   id: string;
@@ -69,6 +73,13 @@ export interface UsageHistory {
     usageCount: number;
   };
   daily: UsageHistoryDay[];
+  // Lebenslange Anzahl Nutzungen des Fahrzeugs, UNABHAENGIG vom Zeitraum-Filter
+  // oben (anders als totals.usageCount) - entscheidet, ob der Startwert noch
+  // direkt bearbeitet werden darf (siehe updateStartingReading()): nur
+  // erlaubt, solange noch keine echte Nutzung erfasst wurde, d.h. ausser der
+  // beim Anlegen automatisch erzeugten Referenz-Nutzung (siehe create()) ist
+  // noch keine dazugekommen.
+  allTimeUsageCount: number;
 }
 
 @Injectable()
@@ -213,6 +224,60 @@ export class VehiclesService {
 
       return vehicle;
     });
+  }
+
+  /**
+   * Korrigiert den Startwert (Betriebsstunden/Kilometer) eines Fahrzeugs, das
+   * noch keine echte Nutzung erfasst hat - z.B. weil er beim Anlegen falsch
+   * oder nur als Platzhalter (0) eingetragen wurde. "Noch keine echte
+   * Nutzung" heisst: ausser der beim Anlegen automatisch erzeugten
+   * Referenz-Nutzung (siehe create()) existiert keine weitere - sobald eine
+   * dazukommt, muesste eine rueckwirkende Aenderung des Startwerts alle
+   * folgenden Nutzungen verschieben, was stattdessen ueber das normale
+   * Bearbeiten der einzelnen Nutzungen passieren soll.
+   */
+  async updateStartingReading(
+    vehicleId: string,
+    currentOperatingHours: number,
+    creatorId: string,
+  ): Promise<void> {
+    const vehicle = await this.repo.findOne({ where: { id: vehicleId } });
+    if (!vehicle) {
+      throw new AppNotFoundException(
+        ErrorCode.VEHICLE_NOT_FOUND,
+        `Vehicle with ID ${vehicleId} not found`,
+        { id: vehicleId },
+      );
+    }
+
+    const usages = await this.usageRepo.find({ where: { vehicleId } });
+
+    if (usages.length > 1) {
+      throw new AppConflictException(
+        ErrorCode.VEHICLE_HAS_USAGES,
+        'Das Fahrzeug hat bereits Nutzungen erfasst - der Startwert kann nicht mehr direkt geändert werden.',
+      );
+    }
+
+    if (usages.length === 1) {
+      const [usage] = usages;
+      usage.startOperatingHours = currentOperatingHours;
+      usage.endOperatingHours = currentOperatingHours;
+      await this.usageRepo.save(usage);
+      return;
+    }
+
+    // Kein Usage vorhanden (z.B. Altdaten von vor Einfuehrung der
+    // Referenz-Nutzung) - jetzt nachtragen statt abzulehnen.
+    await this.usageRepo.save(
+      this.usageRepo.create({
+        vehicleId,
+        creatorId,
+        startOperatingHours: currentOperatingHours,
+        endOperatingHours: currentOperatingHours,
+        fuelLitersRefilled: 0,
+      }),
+    );
   }
 
   /**
@@ -391,7 +456,7 @@ export class VehiclesService {
       startDate && endDate
         ? { vehicleId, usageDate: Between(startDate, endDate) }
         : { vehicleId };
-    const [firstUsage, lastUsage] = await Promise.all([
+    const [firstUsage, lastUsage, allTimeUsageCount] = await Promise.all([
       this.usageRepo.findOne({
         where: dateWhere,
         order: { usageDate: 'ASC' },
@@ -400,6 +465,7 @@ export class VehiclesService {
         where: dateWhere,
         order: { usageDate: 'DESC' },
       }),
+      this.usageRepo.count({ where: { vehicleId } }),
     ]);
 
     return {
@@ -414,6 +480,7 @@ export class VehiclesService {
         usageCount: totals.usageCount,
       },
       daily,
+      allTimeUsageCount,
     };
   }
 

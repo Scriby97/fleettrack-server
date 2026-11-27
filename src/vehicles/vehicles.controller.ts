@@ -6,12 +6,14 @@ import {
   Delete,
   Param,
   Put,
+  Patch,
   Query,
 } from '@nestjs/common';
 import { VehiclesService } from './vehicles.service';
 import { VehicleEntity } from './vehicle.entity';
 import { CreateVehicleDto } from './dto/create-vehicle.dto';
 import { UpdateVehicleDto } from './dto/update-vehicle.dto';
+import { UpdateStartingReadingDto } from './dto/update-starting-reading.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthUser } from '../auth/decorators/current-user.decorator';
 import { UserRole, OrganizationRole } from '../auth/enums/user-role.enum';
@@ -346,6 +348,36 @@ export class VehiclesController {
     const updated = await this.vehiclesService.update(id, dto);
     this.realtimeService.publish(vehicle.organizationId);
     return updated;
+  }
+
+  /**
+   * PATCH /vehicles/:id/starting-reading
+   * Startwert (Betriebsstunden/Kilometer) eines Fahrzeugs korrigieren, das
+   * noch keine echte Nutzung hat (siehe VehiclesService.updateStartingReading).
+   * Gleiche Berechtigung wie das normale Bearbeiten.
+   */
+  @Patch(':id/starting-reading')
+  async updateStartingReading(
+    @Param('id') id: string,
+    @Body() dto: UpdateStartingReadingDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    const vehicle = await this.vehiclesService.findOne(id);
+    if (!vehicle) {
+      throw new AppNotFoundException(
+        ErrorCode.VEHICLE_NOT_FOUND,
+        `Vehicle with ID ${id} not found`,
+        { id },
+      );
+    }
+    await this.assertCanManageVehicle(user, vehicle);
+    await this.vehiclesService.updateStartingReading(
+      id,
+      dto.currentOperatingHours,
+      user.id,
+    );
+    this.realtimeService.publish(vehicle.organizationId);
+    return { currentOperatingHours: dto.currentOperatingHours };
   }
 
   /**

@@ -1,7 +1,10 @@
 import { IsNull } from 'typeorm';
 import { VehiclesService } from './vehicles.service';
 import { VehicleEntity } from './vehicle.entity';
-import { AppNotFoundException } from '../common/exceptions';
+import {
+  AppConflictException,
+  AppNotFoundException,
+} from '../common/exceptions';
 
 /** A chainable TypeORM QueryBuilder stand-in: every method returns itself. */
 function createQueryBuilderMock(terminalResults: Record<string, any> = {}) {
@@ -56,7 +59,10 @@ describe('VehiclesService', () => {
   };
   const usageRepo = {
     findOne: jest.fn(),
+    find: jest.fn(),
     count: jest.fn(),
+    create: jest.fn((data) => data),
+    save: jest.fn((data) => Promise.resolve(data)),
     createQueryBuilder: jest.fn(),
   };
 
@@ -280,6 +286,10 @@ describe('VehiclesService', () => {
       usageRepo.findOne
         .mockResolvedValueOnce({ startOperatingHours: 100 }) // first usage
         .mockResolvedValueOnce({ endOperatingHours: 108.5 }); // last usage
+      // Lebenslang mehr Nutzungen als im (hier ungefilterten) Zeitraum-Total -
+      // bewusst unterschiedlich zu usageCount (2), um zu zeigen, dass
+      // allTimeUsageCount unabhaengig vom Zeitraum-Filter gezaehlt wird.
+      usageRepo.count.mockResolvedValue(5);
 
       const result = await service.usageHistory('v1');
 
@@ -292,6 +302,7 @@ describe('VehiclesService', () => {
         usageCount: 2,
       });
       expect(result.daily).toHaveLength(2);
+      expect(result.allTimeUsageCount).toBe(5);
     });
 
     it('returns null first/last hours and zeroed totals when there is no usage at all', async () => {
@@ -299,6 +310,7 @@ describe('VehiclesService', () => {
       const qb = createQueryBuilderMock({ rawMany: [] });
       usageRepo.createQueryBuilder.mockReturnValue(qb);
       usageRepo.findOne.mockResolvedValue(null);
+      usageRepo.count.mockResolvedValue(0);
 
       const result = await service.usageHistory('v1');
 
@@ -310,6 +322,7 @@ describe('VehiclesService', () => {
         usageCount: 0,
       });
       expect(result.daily).toEqual([]);
+      expect(result.allTimeUsageCount).toBe(0);
     });
 
     it('applies the date range filter (andWhere) only when both dates are given', async () => {
@@ -547,6 +560,64 @@ describe('VehiclesService', () => {
           endOperatingHours: 0,
         }),
       );
+    });
+  });
+
+  describe('updateStartingReading', () => {
+    it('throws AppNotFoundException when the vehicle does not exist', async () => {
+      repo.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.updateStartingReading('missing-id', 10, 'user-1'),
+      ).rejects.toThrow(AppNotFoundException);
+    });
+
+    it('throws AppConflictException once a real usage was added besides the reference one', async () => {
+      repo.findOne.mockResolvedValue({ id: 'v1' });
+      usageRepo.find.mockResolvedValue([
+        { id: 'u1', startOperatingHours: 10, endOperatingHours: 10 },
+        { id: 'u2', startOperatingHours: 10, endOperatingHours: 15 },
+      ]);
+
+      await expect(
+        service.updateStartingReading('v1', 20, 'user-1'),
+      ).rejects.toThrow(AppConflictException);
+      expect(usageRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('overwrites the single reference usage (start=end) when only it exists', async () => {
+      repo.findOne.mockResolvedValue({ id: 'v1' });
+      const referenceUsage = {
+        id: 'u1',
+        startOperatingHours: 0,
+        endOperatingHours: 0,
+      };
+      usageRepo.find.mockResolvedValue([referenceUsage]);
+
+      await service.updateStartingReading('v1', 250, 'user-1');
+
+      expect(usageRepo.save).toHaveBeenCalledWith({
+        id: 'u1',
+        startOperatingHours: 250,
+        endOperatingHours: 250,
+      });
+      expect(usageRepo.create).not.toHaveBeenCalled();
+    });
+
+    it('creates a fresh reference usage when the vehicle has none at all (e.g. legacy data)', async () => {
+      repo.findOne.mockResolvedValue({ id: 'v1' });
+      usageRepo.find.mockResolvedValue([]);
+
+      await service.updateStartingReading('v1', 42, 'user-1');
+
+      expect(usageRepo.create).toHaveBeenCalledWith({
+        vehicleId: 'v1',
+        creatorId: 'user-1',
+        startOperatingHours: 42,
+        endOperatingHours: 42,
+        fuelLitersRefilled: 0,
+      });
+      expect(usageRepo.save).toHaveBeenCalled();
     });
   });
 });

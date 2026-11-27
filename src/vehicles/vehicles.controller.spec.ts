@@ -23,6 +23,7 @@ describe('VehiclesController', () => {
     findVehicleIdsWithInconsistentUsages: jest.fn(),
     create: jest.fn(),
     update: jest.fn(),
+    updateStartingReading: jest.fn(),
     delete: jest.fn(),
     countActive: jest.fn(),
   };
@@ -240,6 +241,28 @@ describe('VehiclesController', () => {
       await controller.update('v1', {} as never, adminUser);
 
       expect(realtimeService.publish).toHaveBeenCalledWith('org-a');
+    });
+
+    it('publishes for the organization after correcting the starting reading', async () => {
+      vehiclesService.findOne.mockResolvedValue({
+        id: 'v1',
+        organizationId: 'org-a',
+      });
+      vehiclesService.updateStartingReading.mockResolvedValue(undefined);
+
+      const result = await controller.updateStartingReading(
+        'v1',
+        { currentOperatingHours: 123 } as never,
+        adminUser,
+      );
+
+      expect(vehiclesService.updateStartingReading).toHaveBeenCalledWith(
+        'v1',
+        123,
+        adminUser.id,
+      );
+      expect(realtimeService.publish).toHaveBeenCalledWith('org-a');
+      expect(result).toEqual({ currentOperatingHours: 123 });
     });
 
     it('publishes for the organization after deleting a vehicle', async () => {
