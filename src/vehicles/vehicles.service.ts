@@ -540,6 +540,40 @@ export class VehiclesService {
   }
 
   /**
+   * Fahrzeug-IDs ganz ohne Nutzung (auch nicht die beim Anlegen automatisch
+   * erzeugte Referenz-Nutzung, siehe create()) - z.B. weil die Nutzungen
+   * nachtraeglich geloescht wurden (Saisonstart "auf gruener Wiese"). Fuer
+   * diese Fahrzeuge zeigt FleetTrack ueberall nur "—" als aktuellen Stand,
+   * bis jemand per updateStartingReading() einen Startwert eintraegt - daher
+   * die "!"-Badges in Navigation/Flottenuebersicht, analog zu den
+   * Luecken-/Ueberschneidungs-Badges oben.
+   */
+  async findVehicleIdsWithoutStartingReading(
+    organizationIds?: string[],
+  ): Promise<string[]> {
+    if (organizationIds && organizationIds.length === 0) {
+      return [];
+    }
+
+    const qb = this.repo
+      .createQueryBuilder('v')
+      .leftJoin('usages', 'u', 'u."vehicleId" = v.id')
+      .select('v.id', 'id')
+      .where('v.archivedAt IS NULL')
+      .groupBy('v.id')
+      .having('COUNT(u.id) = 0');
+
+    if (organizationIds) {
+      qb.andWhere('v.organizationId IN (:...organizationIds)', {
+        organizationIds,
+      });
+    }
+
+    const rows = await qb.getRawMany<{ id: string }>();
+    return rows.map((r) => r.id);
+  }
+
+  /**
    * Get the endOperatingHours from the last usage of a vehicle
    */
   async getLastOperatingHours(vehicleId: string): Promise<number | null> {

@@ -138,6 +138,27 @@ export class VehiclesController {
   }
 
   /**
+   * GET /vehicles/missing-starting-reading
+   * Fahrzeug-IDs ganz ohne Nutzung, also auch ohne die beim Anlegen
+   * automatisch erzeugte Referenz-Nutzung (siehe VehiclesService.
+   * findVehicleIdsWithoutStartingReading) - für die "!"-Badges, die Admins/
+   * Owner auffordern, einen Startwert einzutragen. Administratoren können
+   * optional ?organizationId=... übergeben.
+   */
+  @Get('missing-starting-reading')
+  async getMissingStartingReading(
+    @CurrentUser() user: AuthUser,
+    @Query('organizationId') queryOrgId?: string,
+  ) {
+    const organizationIds = await this.resolveOrganizationIds(user, queryOrgId);
+    const vehicleIds =
+      await this.vehiclesService.findVehicleIdsWithoutStartingReading(
+        organizationIds,
+      );
+    return { vehicleIds };
+  }
+
+  /**
    * GET /vehicles/:vehicleId/last-operating-hours
    * Letzte endOperatingHours eines Fahrzeugs abrufen (benötigt Auth)
    * Normale User dürfen dies nur für Fahrzeuge ihrer eigenen Organisation(en)

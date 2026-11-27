@@ -16,6 +16,7 @@ function createQueryBuilderMock(terminalResults: Record<string, any> = {}) {
     where: jest.fn(() => qb),
     andWhere: jest.fn(() => qb),
     groupBy: jest.fn(() => qb),
+    having: jest.fn(() => qb),
     orderBy: jest.fn(() => qb),
     getQueryAndParameters: jest.fn(
       () => terminalResults.queryAndParameters ?? ['SELECT 1', []],
@@ -450,6 +451,39 @@ describe('VehiclesService', () => {
 
       expect(qb.andWhere).toHaveBeenCalledWith(
         'vehicle.organizationId IN (:...organizationIds)',
+        { organizationIds: ['org-a'] },
+      );
+    });
+  });
+
+  describe('findVehicleIdsWithoutStartingReading', () => {
+    it('returns an empty array without querying when given an empty organizationIds array', async () => {
+      const result = await service.findVehicleIdsWithoutStartingReading([]);
+
+      expect(result).toEqual([]);
+      expect(repo.createQueryBuilder).not.toHaveBeenCalled();
+    });
+
+    it('returns the vehicle ids the query groups to (no usage at all)', async () => {
+      const qb = createQueryBuilderMock({
+        rawMany: [{ id: 'v1' }, { id: 'v2' }],
+      });
+      repo.createQueryBuilder.mockReturnValue(qb);
+
+      const result = await service.findVehicleIdsWithoutStartingReading();
+
+      expect(result).toEqual(['v1', 'v2']);
+      expect(qb.having).toHaveBeenCalledWith('COUNT(u.id) = 0');
+    });
+
+    it('filters by organizationIds when given', async () => {
+      const qb = createQueryBuilderMock({ rawMany: [] });
+      repo.createQueryBuilder.mockReturnValue(qb);
+
+      await service.findVehicleIdsWithoutStartingReading(['org-a']);
+
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'v.organizationId IN (:...organizationIds)',
         { organizationIds: ['org-a'] },
       );
     });

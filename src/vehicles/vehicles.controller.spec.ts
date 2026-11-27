@@ -21,6 +21,7 @@ describe('VehiclesController', () => {
     usageHistory: jest.fn(),
     getLastOperatingHours: jest.fn(),
     findVehicleIdsWithInconsistentUsages: jest.fn(),
+    findVehicleIdsWithoutStartingReading: jest.fn(),
     create: jest.fn(),
     update: jest.fn(),
     updateStartingReading: jest.fn(),
@@ -135,6 +136,34 @@ describe('VehiclesController', () => {
 
       expect(
         vehiclesService.findVehicleIdsWithInconsistentUsages,
+      ).toHaveBeenCalledWith(['org-a']);
+    });
+  });
+
+  describe('getMissingStartingReading', () => {
+    it('does not filter by organization for a global administrator without a query param', async () => {
+      vehiclesService.findVehicleIdsWithoutStartingReading.mockResolvedValue([
+        'v1',
+      ]);
+
+      const result = await controller.getMissingStartingReading(adminUser);
+
+      expect(
+        vehiclesService.findVehicleIdsWithoutStartingReading,
+      ).toHaveBeenCalledWith(undefined);
+      expect(result).toEqual({ vehicleIds: ['v1'] });
+    });
+
+    it('scopes a normal user to their own organizations', async () => {
+      membersService.getOrganizationIds.mockResolvedValue(['org-a']);
+      vehiclesService.findVehicleIdsWithoutStartingReading.mockResolvedValue(
+        [],
+      );
+
+      await controller.getMissingStartingReading(normalUser);
+
+      expect(
+        vehiclesService.findVehicleIdsWithoutStartingReading,
       ).toHaveBeenCalledWith(['org-a']);
     });
   });
