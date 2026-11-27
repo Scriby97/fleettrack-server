@@ -23,6 +23,7 @@ import { UpdateOrganizationDto } from './dto/update-organization.dto';
 import { UpdateOrganizationProfileDto } from './dto/update-organization-profile.dto';
 import { CreateInviteDto } from './dto/create-invite.dto';
 import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
+import { UpdatePriorityVehicleDto } from './dto/update-priority-vehicle.dto';
 import { TransferOwnershipDto } from './dto/transfer-ownership.dto';
 import { UpdateSubscriptionDto } from './dto/update-subscription.dto';
 import { SUBSCRIPTION_LIMITS } from './constants/subscription-limits.constant';
@@ -405,6 +406,34 @@ export class OrganizationsController {
     }
     await this.membersService.remove(organizationId, membership.id);
     return { message: 'Organisation verlassen' };
+  }
+
+  /**
+   * PATCH /organizations/:organizationId/priority-vehicle
+   * Persönliche Einstellung: welches Fahrzeug dieser Organisation bei
+   * "Nutzung erfassen" immer vorausgewählt werden soll. Jede Rolle darf das
+   * für die eigene Mitgliedschaft tun (kein OrganizationRolesGuard) -
+   * priorityVehicleId: null setzt es wieder auf das bisherige Standard-
+   * verhalten zurück (zuletzt verwendetes Fahrzeug).
+   */
+  @Patch(':organizationId/priority-vehicle')
+  @UseGuards(OrganizationGuard)
+  async updateMyPriorityVehicle(
+    @Param('organizationId') organizationId: string,
+    @Body() dto: UpdatePriorityVehicleDto,
+    @CurrentOrganizationMembership() membership: OrganizationMemberEntity,
+  ) {
+    if (!membership) {
+      throw new AppForbiddenException(
+        ErrorCode.AUTH_FORBIDDEN_GENERIC,
+        'User is not a member of this organization',
+      );
+    }
+    return this.membersService.updatePriorityVehicle(
+      membership,
+      organizationId,
+      dto.priorityVehicleId,
+    );
   }
 
   // ============================================

@@ -10,6 +10,7 @@ import {
 } from 'typeorm';
 import { UserProfileEntity } from '../auth/entities/user-profile.entity';
 import { OrganizationEntity } from './organization.entity';
+import { VehicleEntity } from '../vehicles/vehicle.entity';
 import { OrganizationRole } from '../auth/enums/user-role.enum';
 
 /**
@@ -57,4 +58,15 @@ export class OrganizationMemberEntity {
   // OrganizationMembersService.archiveMembersExceptOwner/restoreArchivedMembers.
   @Column({ type: 'timestamp', nullable: true })
   archivedAt?: Date | null;
+
+  // Persoenliche Praeferenz des Users: welches Fahrzeug dieser Organisation
+  // bei "Nutzung erfassen" immer vorausgewaehlt werden soll (statt des sonst
+  // zuletzt verwendeten Fahrzeugs, siehe createUsage.tsx). NULL (Standard) =
+  // altes Verhalten. ON DELETE SET NULL, falls das Fahrzeug geloescht wird.
+  @Column({ type: 'uuid', nullable: true })
+  priorityVehicleId?: string | null;
+
+  @ManyToOne(() => VehicleEntity, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'priorityVehicleId' })
+  priorityVehicle?: VehicleEntity | null;
 }

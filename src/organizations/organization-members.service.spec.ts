@@ -3,6 +3,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { IsNull, Not } from 'typeorm';
 import { OrganizationMembersService } from './organization-members.service';
 import { OrganizationMemberEntity } from './organization-member.entity';
+import { VehicleEntity } from '../vehicles/vehicle.entity';
 import { OrganizationRole } from '../auth/enums/user-role.enum';
 import {
   AppNotFoundException,
@@ -32,6 +33,10 @@ describe('OrganizationMembersService', () => {
     },
   };
 
+  const vehicleRepository = {
+    findOne: jest.fn(),
+  };
+
   beforeEach(async () => {
     jest.clearAllMocks();
 
@@ -41,6 +46,10 @@ describe('OrganizationMembersService', () => {
         {
           provide: getRepositoryToken(OrganizationMemberEntity),
           useValue: memberRepository,
+        },
+        {
+          provide: getRepositoryToken(VehicleEntity),
+          useValue: vehicleRepository,
         },
       ],
     }).compile();
@@ -274,6 +283,68 @@ describe('OrganizationMembersService', () => {
       expect(memberRepository.update).toHaveBeenCalledWith(
         { organizationId: 'org-1', archivedAt: Not(IsNull()) },
         { archivedAt: null },
+      );
+    });
+  });
+
+  describe('updatePriorityVehicle', () => {
+    const membership = {
+      id: 'member-1',
+      userId: 'user-1',
+      organizationId: 'org-1',
+      priorityVehicleId: null,
+    } as unknown as OrganizationMemberEntity;
+
+    it('throws VEHICLE_NOT_IN_YOUR_ORG when the vehicle does not exist', async () => {
+      vehicleRepository.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.updatePriorityVehicle(membership, 'org-1', 'vehicle-1'),
+      ).rejects.toThrow(AppBadRequestException);
+      expect(memberRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('throws VEHICLE_NOT_IN_YOUR_ORG when the vehicle belongs to another organization', async () => {
+      vehicleRepository.findOne.mockResolvedValue({
+        id: 'vehicle-1',
+        organizationId: 'org-2',
+      });
+
+      await expect(
+        service.updatePriorityVehicle(membership, 'org-1', 'vehicle-1'),
+      ).rejects.toThrow(AppBadRequestException);
+      expect(memberRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('sets the priority vehicle when it belongs to the organization', async () => {
+      vehicleRepository.findOne.mockResolvedValue({
+        id: 'vehicle-1',
+        organizationId: 'org-1',
+      });
+
+      const result = await service.updatePriorityVehicle(
+        membership,
+        'org-1',
+        'vehicle-1',
+      );
+
+      expect(result.priorityVehicleId).toBe('vehicle-1');
+      expect(memberRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({ priorityVehicleId: 'vehicle-1' }),
+      );
+    });
+
+    it('clears the priority vehicle without checking the vehicle repository when null', async () => {
+      const result = await service.updatePriorityVehicle(
+        membership,
+        'org-1',
+        null,
+      );
+
+      expect(vehicleRepository.findOne).not.toHaveBeenCalled();
+      expect(result.priorityVehicleId).toBeNull();
+      expect(memberRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({ priorityVehicleId: null }),
       );
     });
   });

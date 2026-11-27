@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, IsNull, Not, Repository } from 'typeorm';
 import { OrganizationMemberEntity } from './organization-member.entity';
+import { VehicleEntity } from '../vehicles/vehicle.entity';
 import { OrganizationRole } from '../auth/enums/user-role.enum';
 import {
   AppBadRequestException,
@@ -15,6 +16,8 @@ export class OrganizationMembersService {
   constructor(
     @InjectRepository(OrganizationMemberEntity)
     private readonly memberRepository: Repository<OrganizationMemberEntity>,
+    @InjectRepository(VehicleEntity)
+    private readonly vehicleRepository: Repository<VehicleEntity>,
   ) {}
 
   /**
@@ -291,6 +294,33 @@ export class OrganizationMembersService {
       { organizationId, archivedAt: Not(IsNull()) },
       { archivedAt: null },
     );
+  }
+
+  /**
+   * Setzt (oder löscht, bei null) das persönliche Prioritätsfahrzeug einer
+   * Mitgliedschaft - wird bei "Nutzung erfassen" immer vorausgewählt (siehe
+   * createUsage.tsx). Jede Rolle darf das für die eigene Mitgliedschaft tun,
+   * daher keine Rollen-Prüfung hier (Guard im Controller ist nur OrganizationGuard).
+   */
+  async updatePriorityVehicle(
+    membership: OrganizationMemberEntity,
+    organizationId: string,
+    priorityVehicleId: string | null,
+  ): Promise<OrganizationMemberEntity> {
+    if (priorityVehicleId) {
+      const vehicle = await this.vehicleRepository.findOne({
+        where: { id: priorityVehicleId },
+      });
+      if (!vehicle || vehicle.organizationId !== organizationId) {
+        throw new AppBadRequestException(
+          ErrorCode.VEHICLE_NOT_IN_YOUR_ORG,
+          'Fahrzeug gehört nicht zu dieser Organisation',
+        );
+      }
+    }
+
+    membership.priorityVehicleId = priorityVehicleId;
+    return this.memberRepository.save(membership);
   }
 
   private async findMemberOrThrow(
